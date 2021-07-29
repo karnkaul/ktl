@@ -7,7 +7,7 @@
 
 namespace ktl {
 ///
-/// \brief Basic wrapper for a T and its mutex
+/// \brief Basic wrapper for a T and its (mutable) mutex
 ///
 template <typename T, typename M = std::mutex>
 struct tmutex {

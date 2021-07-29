@@ -13,7 +13,7 @@
 
 namespace ktl {
 ///
-/// \brief vector-like container using bytearray as storage
+/// \brief Fixed-size vector-like container using bytearray as storage
 /// Refer to std::vector for API documentation
 ///
 template <typename T, std::size_t N>

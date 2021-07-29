@@ -9,7 +9,7 @@
 
 namespace ktl {
 ///
-/// \brief std::thread wrapper that joins on destruction / move
+/// \brief std::thread wrapper that joins on destruction / move, and supports stop_t tokens
 ///
 class kthread {
   public:
