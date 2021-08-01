@@ -19,7 +19,7 @@ class fixed_any final {
 	using enable_if_different = std::enable_if_t<is_different_v<T>>;
 
   public:
-#if defined(KT_FIXED_ANY_THROW)
+#if defined(KTL_FIXED_ANY_THROW)
 	static constexpr bool throw_exception = true;
 #else
 	static constexpr bool throw_exception = false;
@@ -87,10 +87,10 @@ class fixed_any final {
 	constexpr void emplace(T const& t);
 
 	template <typename T>
-	static erased_semantics_t const& erased() noexcept;
+	static erased_semantics const& erased() noexcept;
 
 	std::aligned_storage_t<N, alignof(std::max_align_t)> m_bytes;
-	erased_semantics_t const* m_erased = nullptr;
+	erased_semantics const* m_erased = nullptr;
 };
 
 template <std::size_t N>
@@ -242,8 +242,8 @@ constexpr void fixed_any<N>::emplace(T const& t) {
 
 template <std::size_t N>
 template <typename T>
-erased_semantics_t const& fixed_any<N>::erased() noexcept {
-	static constexpr erased_semantics_t const s_erased{erased_semantics_t::tag_t<T>()};
+erased_semantics const& fixed_any<N>::erased() noexcept {
+	static constexpr erased_semantics const s_erased{erased_semantics::tag_t<T>()};
 	return s_erased;
 }
 } // namespace ktl

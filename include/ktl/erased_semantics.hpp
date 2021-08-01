@@ -4,9 +4,13 @@
 #pragma once
 #include <new>
 #include <type_traits>
+#include <utility>
 
 namespace ktl {
-class erased_semantics_t {
+///
+/// \brief Basic type eraser that supports move/copy construct/assign and destroy semantics
+///
+class erased_semantics {
 	template <typename T>
 	static constexpr bool can_copy_v = std::is_copy_constructible_v<T>&& std::is_copy_assignable_v<T>;
 
@@ -15,72 +19,39 @@ class erased_semantics_t {
 	struct tag_t {};
 
 	template <typename T>
-	constexpr erased_semantics_t(tag_t<T>) noexcept;
+	constexpr erased_semantics(tag_t<T>) noexcept;
 
-	void move_construct(void* src, void* dst) const noexcept;
-	void move_assign(void* src, void* dst) const noexcept;
-	void copy_construct(void const* src, void* dst) const;
-	void copy_assign(void const* src, void* dst) const;
-	void destroy(void const* src) const noexcept;
+	void move_construct(void* src, void* dst) const noexcept { m_fop(oper::move_c, src, dst); }
+	void move_assign(void* src, void* dst) const noexcept { m_fop(oper::move_a, src, dst); }
+	void copy_construct(void const* src, void* dst) const { m_fop(oper::copy_c, const_cast<void*>(src), dst); }
+	void copy_assign(void const* src, void* dst) const { m_fop(oper::copy_a, const_cast<void*>(src), dst); }
+	void destroy(void const* src) const noexcept { m_fop(oper::destruct, const_cast<void*>(src), nullptr); }
 
   private:
-	template <typename T>
-	static void move_c(void* src, void* dst) noexcept;
-	template <typename T>
-	static void move_a(void* src, void* dst) noexcept;
-	template <typename T>
-	static void copy_c(void const* src, void* dst);
-	template <typename T>
-	static void copy_a(void const* src, void* dst);
+	enum class oper { move_c, move_a, copy_c, copy_a, destruct };
+	using fop = void (*)(oper op, void* src, void* dst);
 
 	template <typename T>
-	static void destroy_(void const* pPtr) noexcept;
+	static void operate(oper op, void* src, void* dst = {});
 
-	using move_t = void (*)(void* src, void* dst);
-	using copy_t = void (*)(void const* src, void* dst);
-	using destroy_t = void (*)(void const* src);
-
-	move_t const m_mc;
-	move_t const m_ma;
-	copy_t const m_cc;
-	copy_t const m_ca;
-	destroy_t const m_d;
+	fop const m_fop;
 };
 
 // impl
 
 template <typename T>
-constexpr erased_semantics_t::erased_semantics_t(tag_t<T>) noexcept
-	: m_mc(&move_c<T>), m_ma(&move_a<T>), m_cc(&copy_c<T>), m_ca(&copy_a<T>), m_d(&destroy_<T>) {
+constexpr erased_semantics::erased_semantics(tag_t<T>) noexcept : m_fop(&operate<T>) {
 	static_assert(can_copy_v<T>, "T must be copiable");
 }
 
-inline void erased_semantics_t::move_construct(void* src, void* dst) const noexcept { m_mc(src, dst); }
-inline void erased_semantics_t::move_assign(void* src, void* dst) const noexcept { m_ma(src, dst); }
-inline void erased_semantics_t::copy_construct(void const* src, void* dst) const { m_cc(src, dst); }
-inline void erased_semantics_t::copy_assign(void const* src, void* dst) const { m_ca(src, dst); }
-inline void erased_semantics_t::destroy(void const* src) const noexcept { m_d(src); }
 template <typename T>
-void erased_semantics_t::move_c(void* src, void* dst) noexcept {
-	new (dst) T(std::move(*std::launder(reinterpret_cast<T*>(src))));
-}
-template <typename T>
-void erased_semantics_t::move_a(void* src, void* dst) noexcept {
-	T* t = std::launder(reinterpret_cast<T*>(dst));
-	*t = std::move(*std::launder(reinterpret_cast<T*>(src)));
-}
-template <typename T>
-void erased_semantics_t::copy_c(void const* src, void* dst) {
-	new (dst) T(*std::launder(reinterpret_cast<T const*>(src)));
-}
-template <typename T>
-void erased_semantics_t::copy_a(void const* src, void* dst) {
-	T* t = std::launder(reinterpret_cast<T*>(dst));
-	*t = *std::launder(reinterpret_cast<T const*>(src));
-}
-template <typename T>
-void erased_semantics_t::destroy_(void const* src) noexcept {
-	T const* t = std::launder(reinterpret_cast<T const*>(src));
-	t->~T();
+void erased_semantics::operate(oper op, void* src, void* dst) {
+	switch (op) {
+	case oper::move_c: new (dst) T(std::move(*std::launder(reinterpret_cast<T*>(src)))); break;
+	case oper::move_a: *std::launder(reinterpret_cast<T*>(dst)) = std::move(*std::launder(reinterpret_cast<T*>(src))); break;
+	case oper::copy_c: new (dst) T(*std::launder(reinterpret_cast<T const*>(src))); break;
+	case oper::copy_a: *std::launder(reinterpret_cast<T*>(dst)) = *std::launder(reinterpret_cast<T const*>(src)); break;
+	case oper::destruct: std::launder(reinterpret_cast<T const*>(src))->~T(); break;
+	}
 }
 } // namespace ktl
