@@ -38,6 +38,14 @@ Features:
 - Clear all queues and return residue
 - Deactivate all queues (as secondary wait condition)
 
+#### `either.hpp`
+
+RAII union of two types.
+
+#### `expected.hpp`
+
+Union of expected and unexpected types; uses `either.hpp`.
+
 #### `fixed_any.hpp`
 
 Fixed-size type erased storage.
@@ -69,16 +77,6 @@ Models a "forward" N-tree (no parent link) via `std::forward_list`.
 #### `not_null.hpp`
 
 Wrapper for raw / smart pointers that is restricted from being null.
-
-#### `result.hpp`
-
-Models a result (`T`) or an error (`E`) value;`T` cannot be void.
-
-Specializations:
-
-- `T, T` : homogeneous result and error types
-- `T, void` : result type only (like `std::optional<T>`)
-- `bool, void` : boolean result only (like `bool`)
 
 #### `tmutex.hpp`
 
