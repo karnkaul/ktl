@@ -104,7 +104,7 @@ class either {
 template <typename T, typename U>
 template <typename Ty, typename>
 constexpr either<T, U>::either(Ty&& t) noexcept(std::is_nothrow_constructible_v<resolve_t<Ty>, Ty>) {
-	if constexpr (std::is_same_v<Ty, T>) {
+	if constexpr (std::is_same_v<std::decay_t<Ty>, T>) {
 		construct(&t_, std::forward<Ty>(t));
 	} else {
 		construct(&u_, std::forward<Ty>(t));
