@@ -2,76 +2,88 @@
 // Requirements: C++17
 
 #pragma once
+#include <cassert>
+#include <cstring>
 #include <ostream>
 #include <sstream>
 #include <string_view>
 
 namespace ktl {
 ///
-/// \brief Customization point; metafunction must provide static std::basic_string_view<Ch> value
+/// \brief Default formatter
+/// Interpolation token: {X} where X is an optional C style format specifier without the leading % (eg {.3f}, {x})
+/// Format spec: all specifiers that are std::printf compatible
 ///
-template <typename Ch>
-struct fmt_token_t;
+struct str_formatter;
 
 ///
-/// \brief Format a std::string using provided interpolation token ("{}" by default)
+/// \brief Format using Ftr and return a std::string
 ///
-template <typename Tk = fmt_token_t<char>, typename... Args>
+template <typename Ftr = str_formatter, typename... Args>
 std::string format(std::string_view fmt, Args const&... args);
-///
-/// \brief Format a std::wstring using provided interpolation token (L"{}" by default)
-///
-template <typename Tk = fmt_token_t<wchar_t>, typename... Args>
-std::wstring format(std::wstring_view fmt, Args const&... args);
-///
-/// \brief Format a std::basic_string<Ch> using provided interpolation token
-///
-template <typename Ch = char, typename Tk = fmt_token_t<Ch>, typename... Args>
-std::basic_string<Ch> format(std::basic_string_view<Ch> fmt, Args const&... args);
 
 // impl
 
 namespace detail {
-template <typename Ch>
-std::basic_ostream<Ch>& format_str(std::basic_ostream<Ch>& out, std::basic_string_view<Ch> fmt) {
-	return out << fmt;
-}
+template <typename T, typename = void>
+struct ostream_defined : std::false_type {};
+template <typename T>
+struct ostream_defined<T, std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T const&>())>> : std::true_type {};
+template <typename T>
+constexpr bool ostream_operator_defined_v = ostream_defined<T>::value;
 
-template <typename Ch, typename Tk, typename Arg, typename... Args>
-std::basic_ostream<Ch>& format_str(std::basic_ostream<Ch>& out, std::basic_string_view<Ch> fmt, Arg const& arg, Args const&... args) {
-	if (auto search = fmt.find(Tk::value); search != std::basic_string<Ch>::npos) {
-		std::basic_string_view<Ch> text(fmt.data(), search);
-		out << text << arg;
-		return format_str(out, fmt.substr(search + Tk::value.size()), args...);
+template <typename Ftr, typename T, typename... Ts>
+std::ostream& format_str(std::ostream& out, std::string_view fmt, T const& t, Ts const&... ts) {
+	std::size_t const bb = fmt.find(Ftr::begin_v);
+	std::size_t const be = fmt.find(Ftr::end_v);
+	if (bb < fmt.size() && be < fmt.size() && bb < be) {
+		out << fmt.substr(0, bb);
+		Ftr{}(out, fmt.substr(bb, be - bb), t);
+		auto const residue = fmt.substr(be + 1);
+		if constexpr (sizeof...(Ts) > 0) {
+			return format_str<Ftr>(out, residue, ts...);
+		} else {
+			return out << residue;
+		}
 	}
-	return format_str(out, fmt);
+	return out << fmt;
 }
 } // namespace detail
 
-template <>
-struct fmt_token_t<char> {
-	static constexpr std::basic_string_view<char> value = "{}";
+struct str_formatter {
+	static constexpr char begin_v = '{';
+	static constexpr char end_v = '}';
+
+	template <typename T>
+	std::ostream& operator()(std::ostream& out, std::string_view fmt_spec, T const& t) {
+		if constexpr (std::is_trivial_v<T>) {
+			if (fmt_spec.size() > 2) {
+				static constexpr std::size_t buf_size = 128;
+				static constexpr std::size_t fmt_size = 8;
+				char buf[buf_size] = {};
+				char meta[fmt_size] = "%";
+				assert(fmt_spec.size() < fmt_size);
+				std::memcpy(meta + 1, fmt_spec.data() + 1, fmt_spec.size() - 1);
+				std::snprintf(buf, buf_size, meta, t);
+				return out << buf;
+			} else {
+				return out << t;
+			}
+		} else {
+			return out << t;
+		}
+	}
 };
 
-template <>
-struct fmt_token_t<wchar_t> {
-	static constexpr std::basic_string_view<wchar_t> value = L"{}";
-};
-
-template <typename Tk, typename... Args>
+template <typename Ftr, typename... Args>
 std::string format(std::string_view fmt, Args const&... args) {
-	return format<char, Tk>(fmt, args...);
-}
-
-template <typename Tk, typename... Args>
-std::wstring format(std::wstring_view fmt, Args const&... args) {
-	return format<wchar_t, Tk>(fmt, args...);
-}
-
-template <typename Ch, typename Tk, typename... Args>
-std::basic_string<Ch> format(std::basic_string_view<Ch> fmt, Args const&... args) {
-	std::basic_stringstream<Ch> str;
-	detail::format_str<Ch, Tk>(str, fmt, args...);
+	static_assert((detail::ostream_operator_defined_v<Args> && ...));
+	std::stringstream str;
+	if constexpr (sizeof...(Args) > 0) {
+		detail::format_str<Ftr>(str, fmt, args...);
+	} else {
+		str << fmt;
+	}
 	return str.str();
 }
 } // namespace ktl
