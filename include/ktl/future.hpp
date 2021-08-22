@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 #include "kthread.hpp"
+#include "move_only_function.hpp"
 
 namespace ktl {
 namespace detail {
@@ -105,6 +106,10 @@ class future_t {
 	/// \brief Check whether shared state, if any, is ready
 	///
 	bool ready() { return wait_for(std::chrono::milliseconds()) == future_status::ready; }
+	///
+	/// \brief Check whether shared state, if any, is busy
+	///
+	bool busy() { return wait_for(std::chrono::milliseconds()) == future_status::deferred; }
 
   private:
 	future_t(std::shared_ptr<typename detail::future_block_t<T>> block) : m_block(std::move(block)), m_status(future_status::deferred) {}
@@ -121,12 +126,12 @@ namespace detail {
 template <typename T>
 struct future_traits_t {
 	using payload_t = std::optional<T>;
-	using callback_t = std::function<void(T)>;
+	using callback_t = ktl::move_only_function<void(T)>;
 };
 template <>
 struct future_traits_t<void> {
 	using payload_t = bool;
-	using callback_t = std::function<void()>;
+	using callback_t = ktl::move_only_function<void()>;
 };
 template <typename T>
 struct future_block_t {
