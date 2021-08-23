@@ -36,7 +36,7 @@ class move_only_function<R(Args...)> {
 	///
 	/// \brief Reset assigned callable, if any
 	///
-	move_only_function& operator=(std::nullptr_t) { reset(); }
+	move_only_function& operator=(std::nullptr_t) { return (reset(), *this); }
 	///
 	/// \brief Reset assigned callable, if any
 	///
@@ -53,7 +53,7 @@ class move_only_function<R(Args...)> {
 	///
 	/// \brief Invoke assigned callable (assumed present)
 	///
-	R operator()(Args... args) const { return m_storage->call(args...); }
+	R operator()(Args... args) const { return m_storage->call(std::move(args)...); }
 
   private:
 	struct base_t {
@@ -65,7 +65,13 @@ class move_only_function<R(Args...)> {
 		F func;
 		template <typename... T>
 		model_t(T&&... t) : func(std::forward<T>(t)...) {}
-		R call(Args... args) override { func(args...); }
+		R call(Args... args) override {
+			if constexpr (std::is_void_v<R>) {
+				func(std::move(args)...);
+			} else {
+				return func(std::move(args)...);
+			}
+		}
 	};
 	std::unique_ptr<base_t> m_storage;
 };

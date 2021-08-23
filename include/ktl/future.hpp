@@ -124,6 +124,47 @@ class future {
 	friend class detail::promise_base_t<T>;
 };
 
+///
+/// \brief Wrapper for invocable and promise
+///
+template <typename F, typename... Args>
+class packaged_task;
+
+///
+/// \brief Wrapper for invocable and promise
+///
+template <typename R, typename... Args>
+class packaged_task<R(Args...)> {
+  public:
+	packaged_task() = default;
+	///
+	/// \brief Construct via invocable
+	///
+	template <typename F>
+	packaged_task(F f);
+
+	///
+	/// \brief Check if invocation is pending
+	///
+	bool valid() const noexcept { return m_func; }
+	explicit operator bool() const noexcept { return valid(); }
+
+	future<R> get_future() { return m_promise.get_future(); }
+	///
+	/// \brief Discard and reset shared and invocation state
+	///
+	void reset();
+
+	///
+	/// \brief Invoke stored callable (assumed valid) and signal associated future(s)
+	///
+	void operator()(Args... args);
+
+  private:
+	move_only_function<R(Args...)> m_func;
+	promise<R> m_promise;
+};
+
 // impl
 
 namespace detail {
@@ -205,5 +246,34 @@ T future<T>::get() const {
 template <typename T>
 void future<T>::wait() const {
 	if (m_block) { get(); }
+}
+
+template <typename R, typename... Args>
+template <typename F>
+packaged_task<R(Args...)>::packaged_task(F f)
+	: m_func([f = std::move(f)](Args... args) {
+		  if constexpr (std::is_void_v<R>) {
+			  f(std::move(args)...);
+		  } else {
+			  return f(std::move(args)...);
+		  }
+	  }) {}
+
+template <typename R, typename... Args>
+void packaged_task<R(Args...)>::reset() {
+	m_func = {};
+	m_promise = {};
+}
+
+template <typename R, typename... Args>
+void packaged_task<R(Args...)>::operator()(Args... args) {
+	assert(m_func);
+	if constexpr (std::is_void_v<R>) {
+		m_func(std::move(args)...);
+		m_promise.set_value();
+	} else {
+		m_promise.set_value(m_func(std::move(args)...));
+	}
+	reset();
 }
 } // namespace ktl
