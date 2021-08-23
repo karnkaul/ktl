@@ -28,7 +28,7 @@ enum class future_status { idle, deferred, ready };
 /// \brief Models an async operation via a associated promise, supports .then()
 ///
 template <typename T>
-class future_t;
+class future;
 
 namespace detail {
 template <typename T>
@@ -39,7 +39,7 @@ class promise_base_t {
 	///
 	/// \brief Obtain an associated future (multiple instances are supported)
 	///
-	future_t<T> get_future() { return future_t<T>(m_block); }
+	future<T> get_future() { return future<T>(m_block); }
 
   protected:
 	detail::future_block_ptr<T> m_block;
@@ -50,9 +50,9 @@ class promise_base_t {
 /// \brief Models an async operation that can deliver the result to a associated future
 ///
 template <typename T>
-class promise_t : public detail::promise_base_t<T> {
+class promise : public detail::promise_base_t<T> {
   public:
-	promise_t() = default;
+	promise() = default;
 
 	using detail::promise_base_t<T>::get_future;
 
@@ -67,9 +67,9 @@ class promise_t : public detail::promise_base_t<T> {
 /// \brief Models an async operation that can signal the result to a associated future
 ///
 template <>
-class promise_t<void> : public detail::promise_base_t<void> {
+class promise<void> : public detail::promise_base_t<void> {
   public:
-	promise_t() = default;
+	promise() = default;
 
 	using detail::promise_base_t<void>::get_future;
 
@@ -80,15 +80,15 @@ class promise_t<void> : public detail::promise_base_t<void> {
 };
 
 template <typename T>
-class future_t {
+class future {
   public:
-	future_t() = default;
+	future() = default;
 
 	///
 	/// \brief Obtain future status after waiting for max duration
 	///
 	template <typename Dur>
-	future_status wait_for(Dur duration);
+	future_status wait_for(Dur duration) const;
 	///
 	/// \brief Enqueue a callback for when future is ready
 	///
@@ -97,7 +97,11 @@ class future_t {
 	///
 	/// \brief Block this thread until future is signalled
 	///
-	T get();
+	T get() const;
+	///
+	/// \brief Block until ready
+	///
+	void wait() const;
 	///
 	/// \brief Check whether this instance points to some shared state
 	///
@@ -105,17 +109,17 @@ class future_t {
 	///
 	/// \brief Check whether shared state, if any, is ready
 	///
-	bool ready() { return wait_for(std::chrono::milliseconds()) == future_status::ready; }
+	bool ready() const { return wait_for(std::chrono::milliseconds()) == future_status::ready; }
 	///
 	/// \brief Check whether shared state, if any, is busy
 	///
-	bool busy() { return wait_for(std::chrono::milliseconds()) == future_status::deferred; }
+	bool busy() const { return wait_for(std::chrono::milliseconds()) == future_status::deferred; }
 
   private:
-	future_t(std::shared_ptr<typename detail::future_block_t<T>> block) : m_block(std::move(block)), m_status(future_status::deferred) {}
+	future(std::shared_ptr<typename detail::future_block_t<T>> block) : m_block(std::move(block)), m_status(future_status::deferred) {}
 
 	detail::future_block_ptr<T> m_block;
-	future_status m_status{};
+	mutable future_status m_status{};
 
 	friend class detail::promise_base_t<T>;
 };
@@ -146,7 +150,7 @@ using future_block_ptr = std::shared_ptr<future_block_t<T>>;
 
 template <typename T>
 template <typename... U, typename>
-void promise_t<T>::set_value(U&&... u) {
+void promise<T>::set_value(U&&... u) {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload.emplace(std::forward<U>(u)...);
@@ -155,7 +159,7 @@ void promise_t<T>::set_value(U&&... u) {
 	this->m_block->cv.notify_all();
 }
 
-inline void promise_t<void>::set_value() {
+inline void promise<void>::set_value() {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload = true;
@@ -166,7 +170,7 @@ inline void promise_t<void>::set_value() {
 
 template <typename T>
 template <typename Dur>
-future_status future_t<T>::wait_for(Dur duration) {
+future_status future<T>::wait_for(Dur duration) const {
 	if (m_status == future_status::deferred) {
 		auto const begin = std::chrono::steady_clock::now();
 		do {
@@ -182,19 +186,24 @@ future_status future_t<T>::wait_for(Dur duration) {
 
 template <typename T>
 template <typename F>
-void future_t<T>::then(F&& func) {
+void future<T>::then(F&& func) {
 	assert(m_block);
 	std::scoped_lock lock(m_block->mutex);
 	m_block->then = std::forward<F>(func);
 }
 
 template <typename T>
-T future_t<T>::get() {
+T future<T>::get() const {
 	assert(m_block);
 	if (!m_block->payload) {
 		std::unique_lock lock(m_block->mutex);
 		m_block->cv.wait(lock, [this]() { return m_block->payload; });
 	}
 	if constexpr (!std::is_void_v<T>) { return *m_block->payload; }
+}
+
+template <typename T>
+void future<T>::wait() const {
+	if (m_block) { get(); }
 }
 } // namespace ktl
