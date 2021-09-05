@@ -50,8 +50,6 @@ class not_null {
 	constexpr decltype(auto) operator*() const noexcept { return *get(); }
 	constexpr decltype(auto) operator->() const noexcept { return get(); }
 
-	friend constexpr bool operator==(not_null<T> const& lhs, not_null<T> const& rhs) noexcept { return lhs.get() == rhs.get(); }
-
   private:
 	T m_ptr;
 };
