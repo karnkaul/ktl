@@ -2,50 +2,185 @@
 // Requirements: C++17
 
 #pragma once
-#include "enum_flags_crtp.hpp"
+#include <cstdint>
+#include "bitflags.hpp"
 
 namespace ktl {
 ///
-/// \brief Trivial wrapper for unsigned int as bit flags (union friendly)
+/// \brief Trivial bit flags wrapper
+/// \param Ty underlying type of bit flags (u32 by default)
 ///
 template <typename Ty = std::uint32_t>
-struct uint_flags : detail::t_enum_flags_<uint_flags<Ty>, Ty> {
-	static_assert(std::is_unsigned_v<Ty>, "Ty must be unsigned");
-
-	using type = Ty;
+struct uint_flags {
 	using value_type = Ty;
 
-	///
-	/// \brief Trivial storage (default initialized)
-	///
-	Ty bits;
+	Ty value;
 
+	///
+	/// \brief Build an instance by setting inputs
+	///
+	template <typename... T>
+	[[nodiscard]] static constexpr uint_flags make(T const... t) noexcept;
 	///
 	/// \brief Conversion operator
 	///
-	constexpr explicit operator Ty() const noexcept { return bits; }
-
+	constexpr explicit operator Ty() const noexcept { return value; }
 	///
-	/// \brief Test if all bits in t are set
+	/// \brief Set inputs
+	///
+	template <typename... T>
+	constexpr uint_flags& set(T const... t) noexcept;
+	///
+	/// \brief Reset inputs
+	///
+	template <typename... T>
+	constexpr uint_flags& reset(T const... t) noexcept;
+	///
+	/// \brief Assign value to mask bits
 	///
 	template <typename T>
-	constexpr bool operator[](T t) const noexcept {
-		return this->all(t);
-	}
+	constexpr uint_flags& assign(T mask, bool value) noexcept;
 	///
-	/// \brief Add set bits and remove unset bits
+	/// \brief Set and unset inputs
 	///
 	template <typename T, typename U = T>
-	constexpr uint_flags<Ty>& update(T set, U unset = {}) noexcept {
-		bits |= static_cast<Ty>(set);
-		bits &= ~static_cast<Ty>(unset);
-		return *this;
-	}
+	constexpr uint_flags<Ty>& update(T set, U unset = {}) noexcept;
 
-  private:
-	constexpr Ty& get_ty() noexcept { return bits; }
+	///
+	/// \brief Test if any bits are set
+	///
+	[[nodiscard]] constexpr bool any() const noexcept { return value != Ty{}; }
+	///
+	/// \brief Test if any bits in t are set
+	///
+	template <typename T>
+	[[nodiscard]] constexpr bool test(T t) const noexcept;
+	///
+	/// \brief Test if any bits in t are set
+	///
+	template <typename T>
+	[[nodiscard]] constexpr bool operator[](T t) const noexcept;
+	///
+	/// \brief Test if any bits in mask are set
+	///
+	template <typename T>
+	[[nodiscard]] constexpr bool any(T mask) const noexcept;
+	///
+	/// \brief Test if all bits in mask are set
+	///
+	template <typename T>
+	[[nodiscard]] constexpr bool all(T mask) const noexcept;
+	///
+	/// \brief Obtain number of set bits
+	///
+	[[nodiscard]] constexpr std::size_t count() const noexcept { return flags::count(value); }
 
-	template <typename T, typename U>
-	friend struct ktl::detail::t_enum_flags_;
+	///
+	/// \brief Perform bitwise OR / add flags
+	///
+	template <typename T>
+	constexpr uint_flags& operator|=(T mask) noexcept;
+	///
+	/// \brief Perform bitwise AND / multiply flags
+	///
+	template <typename T>
+	constexpr uint_flags& operator&=(T mask) noexcept;
+	///
+	/// \brief Perform bitwise XOR / exclusively add flags (add mod 2)
+	///
+	template <typename T>
+	constexpr uint_flags& operator^=(T mask) noexcept;
+
+	///
+	/// \brief Perform bitwise OR / add flags
+	///
+	friend constexpr uint_flags operator|(uint_flags const lhs, uint_flags const rhs) noexcept { return uint_flags(lhs) |= rhs; }
+	///
+	/// \brief Perform bitwise AND / multiply flags
+	///
+	friend constexpr uint_flags operator&(uint_flags const lhs, uint_flags const rhs) noexcept { return uint_flags(lhs) &= rhs; }
+	///
+	/// \brief Perform bitwise XOR / exclusively add flags (add mod 2)
+	///
+	friend constexpr uint_flags operator^(uint_flags const lhs, uint_flags const rhs) noexcept { return uint_flags(lhs) ^= rhs; }
 };
+
+// impl
+
+template <typename Ty>
+template <typename... T>
+constexpr uint_flags<Ty> uint_flags<Ty>::make(T const... t) noexcept {
+	uint_flags ret{};
+	(ret.update(t), ...);
+	return ret;
+}
+template <typename Ty>
+template <typename... T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::set(T const... t) noexcept {
+	(update(t), ...);
+	return *this;
+}
+template <typename Ty>
+template <typename... T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::reset(T const... t) noexcept {
+	(update({}, t), ...);
+	return *this;
+}
+template <typename Ty>
+template <typename T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::assign(T const mask, bool const set) noexcept {
+	if (set) {
+		set(mask);
+	} else {
+		reset(mask);
+	}
+	return *this;
+}
+template <typename Ty>
+template <typename T, typename U>
+constexpr uint_flags<Ty>& uint_flags<Ty>::update(T const set, U const unset) noexcept {
+	value = flags::update(value, static_cast<Ty>(set), static_cast<Ty>(unset));
+	return *this;
+}
+template <typename Ty>
+template <typename T>
+constexpr bool uint_flags<Ty>::test(T const t) const noexcept {
+	return all(t);
+}
+template <typename Ty>
+template <typename T>
+constexpr bool uint_flags<Ty>::operator[](T const t) const noexcept {
+	return test(t);
+}
+template <typename Ty>
+template <typename T>
+constexpr bool uint_flags<Ty>::any(T const mask) const noexcept {
+	return flags::any(value, static_cast<Ty>(mask));
+}
+template <typename Ty>
+template <typename T>
+constexpr bool uint_flags<Ty>::all(T const mask) const noexcept {
+	return flags::all(value, static_cast<Ty>(mask));
+}
+template <typename Ty>
+template <typename T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::operator|=(T const mask) noexcept {
+	static_assert(std::is_integral_v<T> || std::is_enum_v<T>);
+	value |= static_cast<Ty>(mask);
+	return *this;
+}
+template <typename Ty>
+template <typename T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::operator&=(T const mask) noexcept {
+	static_assert(std::is_integral_v<T> || std::is_enum_v<T>);
+	value &= static_cast<Ty>(mask);
+	return *this;
+}
+template <typename Ty>
+template <typename T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::operator^=(T const mask) noexcept {
+	static_assert(std::is_integral_v<T> || std::is_enum_v<T>);
+	value ^= static_cast<Ty>(mask);
+	return *this;
+}
 } // namespace ktl
