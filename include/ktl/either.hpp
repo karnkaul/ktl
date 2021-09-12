@@ -3,6 +3,7 @@
 
 #pragma once
 #include <cassert>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -24,6 +25,8 @@ template <typename T, typename U>
 class either {
 	template <typename Ty>
 	static constexpr bool visitable_v = std::is_invocable_v<Ty, T const&>&& std::is_invocable_v<Ty, U const&>;
+	static constexpr bool noexcept_movable_v = std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<U>;
+	static constexpr bool noexcept_copiable_v = std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_copy_constructible_v<U>;
 
   public:
 	template <typename Ty>
@@ -31,12 +34,15 @@ class either {
 	template <typename Ty>
 	static constexpr bool valid_v = !std::is_void_v<resolve_t<Ty>>;
 
+	///
+	/// \brief (Implicitly) construct via T or U
+	///
 	template <typename Ty = T, typename = std::enable_if_t<valid_v<Ty>>>
 	constexpr either(Ty&& t = T{}) noexcept(std::is_nothrow_constructible_v<resolve_t<Ty>, Ty>);
-	constexpr either(either<T, U>&& rhs) noexcept : m_u(rhs.m_u) { grab<true>(std::move(rhs)); }
-	constexpr either(either<T, U> const& rhs) : m_u(rhs.m_u) { grab<false>(rhs); }
-	constexpr either& operator=(either<T, U>&& rhs) noexcept;
-	constexpr either& operator=(either<T, U> const& rhs);
+
+	constexpr either(either&& rhs) noexcept(noexcept_movable_v) : either() { exchg(*this, rhs); }
+	constexpr either(either const& rhs) noexcept(noexcept_copiable_v);
+	constexpr either& operator=(either rhs) noexcept(noexcept_movable_v) { return (exchg(*this, rhs), *this); }
 	~either() noexcept { destroy(); }
 
 	///
@@ -80,17 +86,18 @@ class either {
 	constexpr void visit(F&& func) const noexcept;
 
   private:
+	static constexpr void exchg(either& lhs, either& rhs) noexcept(noexcept_movable_v);
+	static constexpr void asymm_exchg(either& tsrc, either& usrc) noexcept(noexcept_movable_v);
+
 	template <typename Ty, typename... Args>
-	constexpr void construct(Ty* ptr, Args&&... args) noexcept(std::is_nothrow_constructible_v<Ty, Args...>) {
+	static constexpr void construct(Ty* ptr, Args&&... args) noexcept(std::is_nothrow_constructible_v<Ty, Args...>) {
 		new (ptr) Ty(std::forward<Args>(args)...);
 	}
 	template <typename Ty>
-	constexpr void destruct(Ty const* ptr) noexcept {
+	static constexpr void destruct(Ty const* ptr) noexcept {
 		ptr->~Ty();
 	}
-	void destroy();
-	template <bool NE, typename Ty>
-	constexpr void grab(Ty&& rhs) noexcept(NE);
+	void destroy() noexcept;
 
 	union {
 		T t_;
@@ -113,23 +120,12 @@ constexpr either<T, U>::either(Ty&& t) noexcept(std::is_nothrow_constructible_v<
 }
 
 template <typename T, typename U>
-constexpr either<T, U>& either<T, U>::operator=(either<T, U>&& rhs) noexcept {
-	if (&rhs != this) {
-		destroy();
-		m_u = rhs.m_u;
-		grab<true>(std::move(rhs));
+constexpr either<T, U>::either(either const& rhs) noexcept(noexcept_copiable_v) {
+	if (rhs.m_u) {
+		construct(&u_, rhs.u_);
+	} else {
+		construct(&t_, rhs.t_);
 	}
-	return *this;
-}
-
-template <typename T, typename U>
-constexpr either<T, U>& either<T, U>::operator=(either<T, U> const& rhs) {
-	if (&rhs != this) {
-		destroy();
-		m_u = rhs.m_u;
-		grab<false>(rhs);
-	}
-	return *this;
 }
 
 template <typename T, typename U>
@@ -221,21 +217,35 @@ constexpr void either<T, U>::visit(F&& func) const noexcept {
 }
 
 template <typename T, typename U>
-void either<T, U>::destroy() {
+constexpr void either<T, U>::exchg(either& lhs, either& rhs) noexcept(noexcept_movable_v) {
+	if (lhs.m_u && rhs.m_u) {
+		std::swap(lhs.u_, rhs.u_);
+	} else if (!lhs.m_u && !rhs.m_u) {
+		std::swap(lhs.t_, rhs.t_);
+	} else if (rhs.m_u) {
+		asymm_exchg(lhs, rhs);
+	} else {
+		asymm_exchg(rhs, lhs);
+	}
+	std::swap(lhs.m_u, rhs.m_u);
+}
+
+template <typename T, typename U>
+constexpr void either<T, U>::asymm_exchg(either& tsrc, either& usrc) noexcept(noexcept_movable_v) {
+	T t = std::move(tsrc.t_);
+	U u = std::move(usrc.u_);
+	destruct(&tsrc.t_);
+	destruct(&usrc.u_);
+	construct(&usrc.t_, std::move(t));
+	construct(&tsrc.u_, std::move(u));
+}
+
+template <typename T, typename U>
+void either<T, U>::destroy() noexcept {
 	if (m_u) {
 		destruct(&u_);
 	} else {
 		destruct(&t_);
-	}
-}
-
-template <typename T, typename U>
-template <bool NE, typename Ty>
-constexpr void either<T, U>::grab(Ty&& rhs) noexcept(NE) {
-	if (rhs.m_u) {
-		construct(&u_, std::move(rhs.u_));
-	} else {
-		construct(&t_, std::move(rhs.t_));
 	}
 }
 } // namespace ktl

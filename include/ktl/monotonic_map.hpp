@@ -170,10 +170,8 @@ void monotonic_map<T, Mp>::handle::reset() noexcept {
 
 template <typename T, typename Mp>
 void monotonic_map<T, Mp>::handle::destroy() noexcept {
-	if (m_map) {
-		// TODO: Remove after tests
-		assert(m_id && "Invariant violated: map not null but id is null");
-		if (m_id) { m_map->m_ts.erase(*m_id); }
+	if (m_map && m_id) {
+		m_map->m_ts.erase(*m_id);
 		m_map->m_handles.erase(this);
 	}
 }

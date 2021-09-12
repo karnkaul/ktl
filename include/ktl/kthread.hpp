@@ -36,9 +36,9 @@ class kthread {
 	///
 	template <typename F, typename... Args, typename = invocable_t<F, Args...>>
 	explicit kthread(F&& func, Args&&... args);
-	kthread(kthread&&) = default;
-	kthread& operator=(kthread&&) noexcept;
-	virtual ~kthread();
+	kthread(kthread&& rhs) noexcept : kthread() { exchg(*this, rhs); }
+	kthread& operator=(kthread rhs) noexcept { return (exchg(*this, rhs), *this); }
+	virtual ~kthread() { join(); }
 
 	///
 	/// \brief Join the thread wrapped in this instance, blocking the calling thread
@@ -60,6 +60,9 @@ class kthread {
 	/// \brief Whether to send stop signal before joining
 	///
 	policy m_join = policy::wait;
+
+  protected:
+	void exchg(kthread& lhs, kthread& rhs) noexcept;
 
   private:
 	std::thread m_thread;
@@ -94,14 +97,6 @@ inline kthread::kthread(F&& func, Args&&... args) {
 		m_thread = std::thread(std::forward<F>(func), std::forward<Args>(args)...);
 	}
 }
-inline kthread& kthread::operator=(kthread&& rhs) noexcept {
-	if (&rhs != this) {
-		join();
-		swap(rhs);
-	}
-	return *this;
-}
-inline kthread::~kthread() { join(); }
 inline void kthread::swap(kthread& rhs) noexcept {
 	std::swap(m_thread, rhs.m_thread);
 	std::swap(m_stop, rhs.m_stop);
@@ -121,5 +116,10 @@ inline bool kthread::join() {
 		return true;
 	}
 	return false;
+}
+inline void kthread::exchg(kthread& lhs, kthread& rhs) noexcept {
+	std::swap(lhs.m_thread, rhs.m_thread);
+	std::swap(lhs.m_stop, rhs.m_stop);
+	std::swap(lhs.m_join, rhs.m_join);
 }
 } // namespace ktl
