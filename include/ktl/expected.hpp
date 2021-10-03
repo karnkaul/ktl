@@ -78,7 +78,7 @@ class expected {
 
 	constexpr T const& operator*() const& { return value(); }
 	constexpr T& operator*() & { return value(); }
-	constexpr T&& operator*() && { return value(); }
+	constexpr T&& operator*() && { return std::move(value()); }
 
 	constexpr T const* operator->() const { return &value(); }
 	constexpr T* operator->() { return &value(); }
@@ -86,6 +86,54 @@ class expected {
   private:
 	either<T, E> m_either;
 	bool m_err = false;
+};
+
+///
+/// \brief Models expected success or an unexpected error
+///
+template <typename E>
+class expected<void, E> {
+  public:
+	///
+	/// \brief Obtain a success value
+	///
+	static constexpr expected success() noexcept { return expected(); }
+	///
+	/// \brief Construct a (success) value
+	///
+	constexpr expected() = default;
+	///
+	/// \brief Construct an error value
+	///
+	constexpr expected(E e) noexcept(std::is_nothrow_move_constructible_v<E>) : m_either(std::move(e)) {}
+	///
+	/// \brief Explicitly construct an error
+	///
+	constexpr expected(unexpected<E> e) noexcept(std::is_nothrow_move_constructible_v<E>) : m_either(std::move(e.payload)) {}
+
+	constexpr bool has_value() const noexcept { return m_either.template contains<dummy_t>(); }
+	constexpr bool has_error() const noexcept { return m_either.template contains<E>(); }
+	///
+	/// \brief Check if instance represents success
+	///
+	constexpr explicit operator bool() const noexcept { return has_value(); }
+
+	///
+	/// \brief Obtain a const lvalue reference to the held error (asserts if not error)
+	///
+	constexpr E const& error() const& noexcept;
+	///
+	/// \brief Obtain an lvalue reference to the held error (asserts if not error)
+	///
+	constexpr E& error() & noexcept;
+	///
+	/// \brief Obtain an rvalue reference to the held error (asserts if not error)
+	///
+	constexpr E&& error() && noexcept;
+
+  private:
+	struct dummy_t {};
+	either<dummy_t, E> m_either;
 };
 
 // impl
@@ -128,6 +176,24 @@ constexpr E& expected<T, E>::error() & noexcept {
 template <typename T, typename E>
 constexpr E&& expected<T, E>::error() && noexcept {
 	assert(m_err);
+	return std::move(m_either).template get<E>();
+}
+
+template <typename E>
+constexpr E const& expected<void, E>::error() const& noexcept {
+	assert(has_error());
+	return m_either.template get<E>();
+}
+
+template <typename E>
+constexpr E& expected<void, E>::error() & noexcept {
+	assert(has_error());
+	return m_either.template get<E>();
+}
+
+template <typename E>
+constexpr E&& expected<void, E>::error() && noexcept {
+	assert(has_error());
 	return std::move(m_either).template get<E>();
 }
 } // namespace ktl
