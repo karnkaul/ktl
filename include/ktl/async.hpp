@@ -12,6 +12,9 @@ class async {
 	template <typename F, typename... Args>
 	using Ret = std::invoke_result_t<F, Args...>;
 
+	async() = default;
+	~async() { ktl::tlock(m_threads)->clear(); }
+
 	///
 	/// \brief Enqueue callable in thread pool and obtain future
 	///

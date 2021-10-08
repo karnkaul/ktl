@@ -25,7 +25,7 @@ using future_block_ptr = std::shared_ptr<future_block_t<T>>;
 enum class future_status { idle, deferred, ready };
 
 ///
-/// \brief Models an async operation via a associated promise, supports .then()
+/// \brief Models an async operation via a associated promise, supports .then(); T must be copiable
 ///
 template <typename T>
 class future;
