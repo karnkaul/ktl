@@ -86,6 +86,10 @@ Basic and strict wrappers for a `T` and its (mutable) mutex, stdlib RAII lock ty
 
 Aliases of `tmutex` with `std::shared_mutex`.
 
+#### `stack_string.hpp`
+
+Wrapper for stack allocated char array / C string.
+
 #### `str_format.hpp`
 
 Format a `std::string` / `std::wstring` using provided interpolation token (`{}` by default).
