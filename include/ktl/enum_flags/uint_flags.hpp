@@ -36,6 +36,11 @@ struct uint_flags {
 	template <typename... T>
 	constexpr uint_flags& reset(T const... t) noexcept;
 	///
+	/// \brief Flip inputs
+	///
+	template <typename... T>
+	constexpr uint_flags& flip(T const... t) noexcept;
+	///
 	/// \brief Assign value to mask bits
 	///
 	template <typename T>
@@ -124,6 +129,19 @@ template <typename Ty>
 template <typename... T>
 constexpr uint_flags<Ty>& uint_flags<Ty>::reset(T const... t) noexcept {
 	(update({}, t), ...);
+	return *this;
+}
+template <typename Ty>
+template <typename... T>
+constexpr uint_flags<Ty>& uint_flags<Ty>::flip(T const... t) noexcept {
+	auto do_flip = [&](auto const t) {
+		if (test(t)) {
+			reset(t);
+		} else {
+			set(t);
+		}
+	};
+	(do_flip(t), ...);
 	return *this;
 }
 template <typename Ty>

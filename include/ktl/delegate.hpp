@@ -76,8 +76,11 @@ class observer_store<T, StorePolicy>::handle {
 
 	constexpr tag_t attach(T t);
 	constexpr bool detach(tag_t tag);
+	constexpr bool replace(tag_t tag, T t) noexcept(std::is_nothrow_move_assignable_v<T>);
 	constexpr void clear() noexcept;
 	constexpr bool operator+=(T t) { return attach(std::move(t)); }
+
+	constexpr tag_t tag(std::size_t index = 0) const noexcept { return index < m_tags.size() ? m_tags[index] : tag_t{}; }
 
   private:
 	static constexpr void exchg(handle& lhs, handle& rhs) noexcept;
@@ -153,6 +156,18 @@ constexpr bool observer_store<T, StorePolicy>::handle::detach(tag_t tag) {
 	if (active() && m_delegate->detach(tag)) {
 		m_tags.erase(std::remove(m_tags.begin(), m_tags.end(), tag), m_tags.end());
 		return true;
+	}
+	return false;
+}
+
+template <typename T, typename StorePolicy>
+constexpr bool observer_store<T, StorePolicy>::handle::replace(tag_t tag, T t) noexcept(std::is_nothrow_move_assignable_v<T>) {
+	auto const it = std::find(m_tags.begin(), m_tags.end(), tag);
+	if (active() && it != m_tags.end()) {
+		if (auto p = m_delegate->find(tag)) {
+			*p = std::move(t);
+			return true;
+		}
 	}
 	return false;
 }

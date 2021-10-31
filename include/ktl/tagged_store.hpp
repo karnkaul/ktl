@@ -35,6 +35,8 @@ class tagged_store {
 
 	[[nodiscard]] constexpr tag_t push(T t);
 	constexpr bool pop(tag_t tag);
+	constexpr T* find(tag_t tag) noexcept;
+	constexpr T const* find(tag_t tag) const noexcept;
 
 	constexpr std::size_t size() const noexcept { return m_store.size(); }
 	constexpr void clear() noexcept { m_store.clear(); }
@@ -123,5 +125,17 @@ constexpr bool tagged_store<T, Policy>::pop(tag_t tag) {
 		return true;
 	}
 	return false;
+}
+
+template <typename T, typename Policy>
+constexpr T* tagged_store<T, Policy>::find(tag_t tag) noexcept {
+	auto it = std::find_if(m_store.begin(), m_store.end(), [tag](entry_t const& e) { return e.tag == tag; });
+	return it != m_store.end() ? &it->t : nullptr;
+}
+
+template <typename T, typename Policy>
+constexpr T const* tagged_store<T, Policy>::find(tag_t tag) const noexcept {
+	auto it = std::find_if(m_store.begin(), m_store.end(), [tag](entry_t const& e) { return e.tag == tag; });
+	return it != m_store.end() ? &it->t : nullptr;
 }
 } // namespace ktl

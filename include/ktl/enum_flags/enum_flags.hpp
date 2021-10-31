@@ -57,6 +57,11 @@ class enum_flags {
 	template <typename... T>
 	constexpr enum_flags& reset(T const... t) noexcept;
 	///
+	/// \brief Flip flags (T must be Enum)
+	///
+	template <typename... T>
+	constexpr enum_flags& flip(T const... t) noexcept;
+	///
 	/// \brief Assign value to mask bits
 	///
 	constexpr enum_flags& assign(enum_flags mask, bool value) noexcept;
@@ -157,6 +162,20 @@ template <typename... T>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::reset(T const... t) noexcept {
 	static_assert((valid_flag_v<T> && ...));
 	(update({}, enum_flags(t)), ...);
+	return *this;
+}
+template <typename Enum, typename Ty, typename Tr>
+template <typename... T>
+constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::flip(T const... t) noexcept {
+	static_assert((valid_flag_v<T> && ...));
+	auto do_flip = [&](auto const t) {
+		if (test(t)) {
+			reset(t);
+		} else {
+			set(t);
+		}
+	};
+	(do_flip(t), ...);
 	return *this;
 }
 template <typename Enum, typename Ty, typename Tr>
