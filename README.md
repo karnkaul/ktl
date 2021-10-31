@@ -21,9 +21,9 @@ A lightweight set of utility headers written in C++17.
 
 Wrapper around an integral type used as bit flags.
 
-#### `enum_flags/uint_flags.hpp`
+#### `enum_flags/bitflags.hpp`
 
-Trivial wrapper for unsigned int as bit flags (union friendly).
+Free functions for working with integral bit flags.
 
 #### `async_queue.hpp`
 
@@ -37,6 +37,10 @@ Features:
 - Thread-safe wait-and-pop (from first of any desired queues)
 - Clear all queues and return residue
 - Deactivate all queues (as secondary wait condition)
+
+### `delegate.hpp`
+
+Tagged observer store with RAII signals.
 
 #### `either.hpp`
 
