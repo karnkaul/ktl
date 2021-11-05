@@ -25,6 +25,10 @@ Wrapper around an integral type used as bit flags.
 
 Free functions for working with integral bit flags.
 
+#### `async.hpp`
+
+RAII wrapper for asynchronous invocation (blocks until drained on destruction)
+
 #### `async_queue.hpp`
 
 FIFO queue with thread safe "sleepy" API.
@@ -37,6 +41,10 @@ Features:
 - Thread-safe wait-and-pop (from first of any desired queues)
 - Clear all queues and return residue
 - Deactivate all queues (as secondary wait condition)
+
+#### `debug_trap.hpp`
+
+x86/x64 debugger trap/break.
 
 ### `delegate.hpp`
 

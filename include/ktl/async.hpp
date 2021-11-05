@@ -1,3 +1,6 @@
+// KTL single-header library
+// Requirements: C++17
+
 #pragma once
 #include <algorithm>
 #include "future.hpp"
