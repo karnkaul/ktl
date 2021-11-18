@@ -23,7 +23,7 @@ class move_only_function<R(Args...)> {
 	/// \brief Construct via callable
 	///
 	template <typename F, typename = enable_if_not_mof_t<F>>
-	move_only_function(F&& f) : m_storage(std::make_unique<model_t<F>>(std::forward<F>(f))) {}
+	move_only_function(F f) : m_storage(std::make_unique<model_t<F>>(std::move(f))) {}
 	///
 	/// \brief Assign a callable
 	///
