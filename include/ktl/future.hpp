@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <vector>
 #include "kthread.hpp"
 #include "move_only_function.hpp"
 
@@ -181,7 +182,7 @@ struct future_traits_t<void> {
 template <typename T>
 struct future_block_t {
 	typename future_traits_t<T>::payload_t payload;
-	typename future_traits_t<T>::callback_t then;
+	std::vector<typename future_traits_t<T>::callback_t> thens;
 	std::mutex mutex;
 	std::condition_variable cv;
 };
@@ -195,7 +196,7 @@ void promise<T>::set_value(U&&... u) {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload.emplace(std::forward<U>(u)...);
-		if (this->m_block->then) { this->m_block->then(*this->m_block->payload); }
+		for (auto const& then : this->m_block->thens) { then(*this->m_block->payload); }
 	}
 	this->m_block->cv.notify_all();
 }
@@ -204,7 +205,7 @@ inline void promise<void>::set_value() {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload = true;
-		if (this->m_block->then) { this->m_block->then(); }
+		for (auto const& then : this->m_block->thens) { then(); }
 	}
 	this->m_block->cv.notify_all();
 }
@@ -230,7 +231,7 @@ template <typename F>
 void future<T>::then(F&& func) {
 	assert(m_block);
 	std::scoped_lock lock(m_block->mutex);
-	m_block->then = std::forward<F>(func);
+	m_block->thens.push_back(std::forward<F>(func));
 }
 
 template <typename T>
