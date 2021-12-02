@@ -126,6 +126,7 @@ constexpr either<T, U>::either(either const& rhs) noexcept(noexcept_copiable_v) 
 	} else {
 		construct(&t_, rhs.t_);
 	}
+	m_u = rhs.m_u;
 }
 
 template <typename T, typename U>
