@@ -1,5 +1,5 @@
 // KTL header=only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include "either.hpp"

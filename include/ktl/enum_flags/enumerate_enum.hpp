@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <array>
@@ -100,8 +100,7 @@ struct enum_iterator {
 		return ret;
 	}
 
-	friend constexpr bool operator==(enum_iterator lhs, enum_iterator rhs) noexcept { return lhs.value == rhs.value; }
-	friend constexpr bool operator!=(enum_iterator lhs, enum_iterator rhs) noexcept { return !(lhs == rhs); }
+	constexpr auto operator<=>(enum_iterator const&) const = default;
 };
 
 template <typename Enum, Enum Begin, Enum End, typename Tr>

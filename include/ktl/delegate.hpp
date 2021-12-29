@@ -1,14 +1,14 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
-#include "move_only_function.hpp"
+#include "async/kfunction.hpp"
 #include "tagged_store.hpp"
 
 namespace ktl {
 namespace detail {
 template <typename... Args>
-using delegate_callback = move_only_function<void(Args const&...)>;
+using delegate_callback = kfunction<void(Args const&...)>;
 } // namespace detail
 
 ///
@@ -56,7 +56,7 @@ class observer_store : public tagged_store<T, StorePolicy> {
 
 	constexpr void exchg(handle const* existing, handle* replace) noexcept;
 	constexpr void track(handle* signal) { m_handles.push_back(signal); }
-	constexpr void untrack(handle const* signal) { m_handles.erase(std::remove(m_handles.begin(), m_handles.end(), signal)); }
+	constexpr void untrack(handle const* signal) { std::erase(m_handles, signal); }
 
 	typename StorePolicy::template store_t<handle*> m_handles;
 
@@ -97,7 +97,7 @@ template <typename StorePolicy, typename... Args>
 class policy_delegate : public observer_store<detail::delegate_callback<Args...>> {
   public:
 	using policy_t = StorePolicy;
-	using callback = move_only_function<void(Args const&...)>;
+	using callback = kfunction<void(Args const&...)>;
 	using signal = typename observer_store<callback>::handle;
 
 	[[nodiscard]] signal make_signal() { return this->make_handle(); }

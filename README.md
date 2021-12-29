@@ -1,13 +1,13 @@
 ## KTL
 
-A lightweight set of utility headers written in C++17.
+A lightweight set of utility headers written in C++20.
 
 ### Usage
 
 **Requirements**
 
 - CMake
-- C++17 compiler (and stdlib)
+- C++20 compiler (and stdlib)
 
 **Steps**
 
@@ -17,19 +17,11 @@ A lightweight set of utility headers written in C++17.
 
 ### Headers
 
-#### `enum_flags/enum_flags.hpp`
-
-Wrapper around an integral type used as bit flags.
-
-#### `enum_flags/bitflags.hpp`
-
-Free functions for working with integral bit flags.
-
-#### `async.hpp`
+#### `async/async.hpp`
 
 RAII wrapper for asynchronous invocation (blocks until drained on destruction)
 
-#### `async_queue.hpp`
+#### `async/async_queue.hpp`
 
 FIFO queue with thread safe "sleepy" API.
 
@@ -41,6 +33,34 @@ Features:
 - Thread-safe wait-and-pop (from first of any desired queues)
 - Clear all queues and return residue
 - Deactivate all queues (as secondary wait condition)
+
+#### `async/kfuture.hpp`
+
+Async operation / shared state wrappers, with `.then()` support.
+
+#### `async/kfunction.hpp`
+
+Callable wrapper that cannot be copied, only moved. Used in `kpackaged_task` and `kfuture`.
+
+#### `async/kthread.hpp`
+
+`std::thread` wrapper that joins on destruction / move, and supports `stop_t` tokens.
+
+#### `async/kmutex.hpp`
+
+Basic and strict wrappers for a `T` and its (mutable) mutex, stdlib RAII lock types.
+
+#### `async/shared_kmutex.hpp`
+
+Aliases of `tmutex` with `std::shared_mutex`.
+
+#### `enum_flags/enum_flags.hpp`
+
+Wrapper around an integral type used as bit flags.
+
+#### `enum_flags/bitflags.hpp`
+
+Free functions for working with integral bit flags.
 
 #### `debug_trap.hpp`
 
@@ -66,21 +86,9 @@ Fixed-size type erased storage.
 
 Fixed-size vector-like container using bytearray as storage.
 
-#### `future.hpp`
-
-Async operation / shared state wrappers, with `.then()` support.
-
-#### `kthread.hpp`
-
-`std::thread` wrapper that joins on destruction / move, and supports `stop_t` tokens.
-
 #### `monotonic_map.hpp`
 
 Wrapper over an (un)ordered map that associates each T with a unique RAII handle which can be used to unregister the instance.
-
-#### `move_only_function.hpp`
-
-Callable wrapper that cannot be copied, only moved.
 
 #### `n_tree.hpp`
 
@@ -90,21 +98,13 @@ Models a "forward" N-tree (no parent link) via `std::forward_list`.
 
 Wrapper for raw / smart pointers that is restricted from being null.
 
-#### `tmutex.hpp`
-
-Basic and strict wrappers for a `T` and its (mutable) mutex, stdlib RAII lock types.
-
-#### `shared_tmutex.hpp`
-
-Aliases of `tmutex` with `std::shared_mutex`.
-
 #### `stack_string.hpp`
 
 Wrapper for stack allocated char array / C string.
 
 #### `str_format.hpp`
 
-Format a `std::string` / `std::wstring` using provided interpolation token (`{}` by default).
+Format a `std::string` using provided interpolation token (`{}` by default).
 
 ### Contributing
 

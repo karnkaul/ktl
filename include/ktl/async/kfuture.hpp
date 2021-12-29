@@ -1,16 +1,15 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <chrono>
 #include <condition_variable>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
+#include "kfunction.hpp"
 #include "kthread.hpp"
-#include "move_only_function.hpp"
 
 namespace ktl {
 namespace detail {
@@ -29,7 +28,7 @@ enum class future_status { idle, deferred, ready };
 /// \brief Models an async operation via a associated promise, supports .then(); T must be copiable
 ///
 template <typename T>
-class future;
+class kfuture;
 
 namespace detail {
 template <typename T>
@@ -40,7 +39,7 @@ class promise_base_t {
 	///
 	/// \brief Obtain an associated future (multiple instances are supported)
 	///
-	future<T> get_future() { return future<T>(m_block); }
+	kfuture<T> get_future() { return kfuture<T>(m_block); }
 
   protected:
 	detail::future_block_ptr<T> m_block;
@@ -51,16 +50,17 @@ class promise_base_t {
 /// \brief Models an async operation that can deliver the result to a associated future
 ///
 template <typename T>
-class promise : public detail::promise_base_t<T> {
+class kpromise : public detail::promise_base_t<T> {
   public:
-	promise() = default;
+	kpromise() = default;
 
 	using detail::promise_base_t<T>::get_future;
 
 	///
 	/// \brief Set value and signal all associated futures
 	///
-	template <typename... U, typename = std::enable_if_t<std::is_constructible_v<T, U...>>>
+	template <typename... U>
+		requires(std::is_constructible_v<T, U...>)
 	void set_value(U&&... u);
 };
 
@@ -68,9 +68,9 @@ class promise : public detail::promise_base_t<T> {
 /// \brief Models an async operation that can signal the result to a associated future
 ///
 template <>
-class promise<void> : public detail::promise_base_t<void> {
+class kpromise<void> : public detail::promise_base_t<void> {
   public:
-	promise() = default;
+	kpromise() = default;
 
 	using detail::promise_base_t<void>::get_future;
 
@@ -81,9 +81,9 @@ class promise<void> : public detail::promise_base_t<void> {
 };
 
 template <typename T>
-class future {
+class kfuture {
   public:
-	future() = default;
+	kfuture() = default;
 
 	///
 	/// \brief Obtain future status after waiting for max duration
@@ -117,7 +117,7 @@ class future {
 	bool busy() const { return wait_for(std::chrono::milliseconds()) == future_status::deferred; }
 
   private:
-	future(std::shared_ptr<typename detail::future_block_t<T>> block) : m_block(std::move(block)), m_status(future_status::deferred) {}
+	kfuture(std::shared_ptr<typename detail::future_block_t<T>> block) : m_block(std::move(block)), m_status(future_status::deferred) {}
 
 	detail::future_block_ptr<T> m_block;
 	mutable future_status m_status{};
@@ -129,20 +129,20 @@ class future {
 /// \brief Wrapper for invocable and promise
 ///
 template <typename F, typename... Args>
-class packaged_task;
+class kpackaged_task;
 
 ///
 /// \brief Wrapper for invocable and promise
 ///
 template <typename R, typename... Args>
-class packaged_task<R(Args...)> {
+class kpackaged_task<R(Args...)> {
   public:
-	packaged_task() = default;
+	kpackaged_task() = default;
 	///
 	/// \brief Construct via invocable
 	///
 	template <typename F>
-	packaged_task(F f);
+	kpackaged_task(F f);
 
 	///
 	/// \brief Check if invocation is pending
@@ -150,7 +150,7 @@ class packaged_task<R(Args...)> {
 	bool valid() const noexcept { return m_func; }
 	explicit operator bool() const noexcept { return valid(); }
 
-	future<R> get_future() { return m_promise.get_future(); }
+	kfuture<R> get_future() { return m_promise.get_future(); }
 	///
 	/// \brief Discard and reset shared and invocation state
 	///
@@ -162,8 +162,8 @@ class packaged_task<R(Args...)> {
 	void operator()(Args... args);
 
   private:
-	move_only_function<R(Args...)> m_func;
-	promise<R> m_promise;
+	kfunction<R(Args...)> m_func;
+	kpromise<R> m_promise;
 };
 
 // impl
@@ -172,12 +172,12 @@ namespace detail {
 template <typename T>
 struct future_traits_t {
 	using payload_t = std::optional<T>;
-	using callback_t = ktl::move_only_function<void(T)>;
+	using callback_t = kfunction<void(T)>;
 };
 template <>
 struct future_traits_t<void> {
 	using payload_t = bool;
-	using callback_t = ktl::move_only_function<void()>;
+	using callback_t = kfunction<void()>;
 };
 template <typename T>
 struct future_block_t {
@@ -191,8 +191,9 @@ using future_block_ptr = std::shared_ptr<future_block_t<T>>;
 } // namespace detail
 
 template <typename T>
-template <typename... U, typename>
-void promise<T>::set_value(U&&... u) {
+template <typename... U>
+	requires(std::is_constructible_v<T, U...>)
+void kpromise<T>::set_value(U&&... u) {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload.emplace(std::forward<U>(u)...);
@@ -201,7 +202,7 @@ void promise<T>::set_value(U&&... u) {
 	this->m_block->cv.notify_all();
 }
 
-inline void promise<void>::set_value() {
+inline void kpromise<void>::set_value() {
 	{
 		std::scoped_lock lock(this->m_block->mutex);
 		this->m_block->payload = true;
@@ -212,7 +213,7 @@ inline void promise<void>::set_value() {
 
 template <typename T>
 template <typename Dur>
-future_status future<T>::wait_for(Dur duration) const {
+future_status kfuture<T>::wait_for(Dur duration) const {
 	if (m_status == future_status::deferred) {
 		auto const begin = std::chrono::steady_clock::now();
 		do {
@@ -228,14 +229,14 @@ future_status future<T>::wait_for(Dur duration) const {
 
 template <typename T>
 template <typename F>
-void future<T>::then(F&& func) {
+void kfuture<T>::then(F&& func) {
 	assert(m_block);
 	std::scoped_lock lock(m_block->mutex);
 	m_block->thens.push_back(std::forward<F>(func));
 }
 
 template <typename T>
-T future<T>::get() const {
+T kfuture<T>::get() const {
 	assert(m_block);
 	if (!m_block->payload) {
 		std::unique_lock lock(m_block->mutex);
@@ -245,13 +246,13 @@ T future<T>::get() const {
 }
 
 template <typename T>
-void future<T>::wait() const {
+void kfuture<T>::wait() const {
 	if (m_block) { get(); }
 }
 
 template <typename R, typename... Args>
 template <typename F>
-packaged_task<R(Args...)>::packaged_task(F f)
+kpackaged_task<R(Args...)>::kpackaged_task(F f)
 	: m_func([f = std::move(f)](Args... args) {
 		  if constexpr (std::is_void_v<R>) {
 			  f(std::move(args)...);
@@ -261,13 +262,13 @@ packaged_task<R(Args...)>::packaged_task(F f)
 	  }) {}
 
 template <typename R, typename... Args>
-void packaged_task<R(Args...)>::reset() {
+void kpackaged_task<R(Args...)>::reset() {
 	m_func = {};
 	m_promise = {};
 }
 
 template <typename R, typename... Args>
-void packaged_task<R(Args...)>::operator()(Args... args) {
+void kpackaged_task<R(Args...)>::operator()(Args... args) {
 	assert(m_func);
 	if constexpr (std::is_void_v<R>) {
 		m_func(std::move(args)...);

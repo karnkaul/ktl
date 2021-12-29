@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <cassert>
@@ -16,7 +16,7 @@ class fixed_any final {
 	template <typename T>
 	static constexpr bool is_different_v = !std::is_same_v<std::decay_t<T>, fixed_any<N>>;
 	template <typename T>
-	using enable_if_different = std::enable_if_t<is_different_v<T>>;
+	static constexpr bool is_copiable_v = std::is_copy_constructible_v<std::decay_t<T>>;
 
   public:
 #if defined(KTL_FIXED_ANY_THROW)
@@ -31,18 +31,20 @@ class fixed_any final {
 	constexpr fixed_any(fixed_any const& rhs);
 	constexpr fixed_any& operator=(fixed_any&& rhs) noexcept;
 	constexpr fixed_any& operator=(fixed_any const& rhs);
-	~fixed_any();
+	constexpr ~fixed_any();
 
 	///
 	/// \brief Construct with object of type T
 	///
-	template <typename T, typename = enable_if_different<T>>
-	constexpr fixed_any(T&& t);
+	template <typename T>
+		requires is_different_v<T> && is_copiable_v<T>
+	constexpr fixed_any(T&& t) noexcept(std::is_nothrow_move_constructible_v<T>) { construct(std::forward<T>(t)); }
 	///
 	/// \brief Assign to object of type T
 	///
-	template <typename T, typename = enable_if_different<T>>
-	constexpr fixed_any& operator=(T&& t);
+	template <typename T>
+		requires is_different_v<T> && is_copiable_v<T>
+	constexpr fixed_any& operator=(T&& t) { return (construct(std::forward<T>(t)), *this); }
 	///
 	/// \brief Check if held type (if any) matches T
 	///
@@ -80,7 +82,8 @@ class fixed_any final {
 	template <typename T>
 	constexpr void construct(T&& t);
 
-	template <typename T, typename = std::enable_if_t<!std::is_lvalue_reference_v<T>>>
+	template <typename T>
+		requires(!std::is_lvalue_reference_v<T>)
 	constexpr void emplace(T&& t);
 
 	template <typename T>
@@ -132,21 +135,8 @@ constexpr fixed_any<N>& fixed_any<N>::operator=(fixed_any const& rhs) {
 }
 
 template <std::size_t N>
-fixed_any<N>::~fixed_any() {
+constexpr fixed_any<N>::~fixed_any() {
 	clear();
-}
-
-template <std::size_t N>
-template <typename T, typename>
-constexpr fixed_any<N>::fixed_any(T&& t) {
-	construct<T>(std::forward<T>(t));
-}
-
-template <std::size_t N>
-template <typename T, typename>
-constexpr fixed_any<N>& fixed_any<N>::operator=(T&& t) {
-	construct<T>(std::forward<T>(t));
-	return *this;
 }
 
 template <std::size_t N>
@@ -208,14 +198,15 @@ constexpr void fixed_any<N>::construct(T&& t) {
 		clear();
 	} else {
 		static_assert(is_different_v<T>, "fixed_any_t: Recursive storage is forbidden");
-		static_assert(sizeof(T) <= N, "fixed_any_t: T is too large (compared to N)");
-		static_assert(alignof(T) <= alignof(std::max_align_t), "fixed_any_t: alignof(T) is too large");
+		static_assert(sizeof(std::decay_t<T>) <= N, "fixed_any_t: T is too large (compared to N)");
+		static_assert(alignof(std::decay_t<T>) <= alignof(std::max_align_t), "fixed_any_t: alignof(T) is too large");
 		emplace(std::forward<T>(t));
 	}
 }
 
 template <std::size_t N>
-template <typename T, typename>
+template <typename T>
+	requires(!std::is_lvalue_reference_v<T>)
 constexpr void fixed_any<N>::emplace(T&& t) {
 	auto const& e = erased<std::decay_t<T>>();
 	if (m_erased && m_erased == &e) {

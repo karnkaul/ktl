@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <cstdint>
@@ -13,10 +13,9 @@ namespace ktl {
 /// \param Ty underlying type of bit flags (u32 by default)
 /// \param Tr trait specifying whether enum is linear (default) or power-of-two
 ///
-template <typename Enum, typename Ty = std::uint32_t, typename Tr = enum_trait_linear>
+template <typename Enum, std::integral Ty = std::uint32_t, typename Tr = enum_trait_linear>
 class enum_flags {
 	static_assert(std::is_enum_v<Enum>, "Enum must be an enum");
-	static_assert(std::is_integral_v<Ty>, "Ty must be integral");
 	static_assert(std::is_same_v<Tr, enum_trait_linear> || std::is_same_v<Tr, enum_trait_pot>, "Invalid enum trait");
 
   public:
@@ -24,8 +23,8 @@ class enum_flags {
 	using storage_t = Ty;
 	static constexpr bool is_linear_v = std::is_same_v<Tr, enum_trait_linear>;
 
-	template <typename T>
-	static constexpr bool valid_flag_v = std::is_same_v<T, enum_flags> || std::is_same_v<T, Enum>;
+	template <typename... T>
+	static constexpr bool valid_flag_v = (... && (std::is_same_v<T, enum_flags> || std::is_same_v<T, Enum>));
 
 	constexpr enum_flags() = default;
 	///
@@ -36,7 +35,8 @@ class enum_flags {
 	/// \brief Set flags (T must be Enum)
 	///
 	template <typename... T>
-	constexpr enum_flags(T const... t) noexcept;
+		requires(valid_flag_v<T...>)
+	constexpr enum_flags(T const... t) noexcept { set(t...); }
 	///
 	/// \brief Obtain underlying bits
 	///
@@ -50,17 +50,20 @@ class enum_flags {
 	/// \brief Set flags (T must be Enum)
 	///
 	template <typename... T>
-	constexpr enum_flags& set(T const... t) noexcept;
+		requires(valid_flag_v<T...>)
+	constexpr enum_flags& set(T const... t) noexcept { return ((update(enum_flags(t)), ...), *this); }
 	///
 	/// \brief Reset flags (T must be Enum)
 	///
 	template <typename... T>
-	constexpr enum_flags& reset(T const... t) noexcept;
+		requires(valid_flag_v<T...>)
+	constexpr enum_flags& reset(T const... t) noexcept { return ((update({}, enum_flags(t)), ...), *this); }
 	///
 	/// \brief Flip flags (T must be Enum)
 	///
 	template <typename... T>
-	constexpr enum_flags& flip(T const... t) noexcept;
+		requires(valid_flag_v<T...>)
+	constexpr enum_flags& flip(T const... t) noexcept { return ((do_flip(t), ...), *this); }
 	///
 	/// \brief Assign value to mask bits
 	///
@@ -98,11 +101,7 @@ class enum_flags {
 	///
 	/// \brief Comparison operator
 	///
-	[[nodiscard]] friend constexpr bool operator==(enum_flags lhs, enum_flags rhs) noexcept { return lhs.bits() == rhs.bits(); }
-	///
-	/// \brief Comparison operator
-	///
-	[[nodiscard]] friend constexpr bool operator!=(enum_flags lhs, enum_flags rhs) noexcept { return !(lhs == rhs); }
+	[[nodiscard]] constexpr bool operator==(enum_flags const& lhs) const noexcept = default;
 
 	///
 	/// \brief Perform bitwise OR / add flags
@@ -131,12 +130,15 @@ class enum_flags {
 	[[nodiscard]] friend constexpr enum_flags operator^(enum_flags const lhs, enum_flags const rhs) noexcept { return enum_flags(lhs) ^= rhs; }
 
   private:
+	template <typename T>
+	constexpr void do_flip(T t) noexcept;
+
 	Ty m_bits{};
 };
 
 // impl
 
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>::enum_flags(Enum const e) noexcept {
 	if constexpr (is_linear_v) {
 		m_bits |= (1 << static_cast<Ty>(e));
@@ -144,41 +146,16 @@ constexpr enum_flags<Enum, Ty, Tr>::enum_flags(Enum const e) noexcept {
 		m_bits |= static_cast<Ty>(e);
 	}
 }
-template <typename Enum, typename Ty, typename Tr>
-template <typename... T>
-constexpr enum_flags<Enum, Ty, Tr>::enum_flags(T const... t) noexcept {
-	static_assert((valid_flag_v<T> && ...));
-	set(t...);
+template <typename Enum, std::integral Ty, typename Tr>
+template <typename T>
+constexpr void enum_flags<Enum, Ty, Tr>::do_flip(T const t) noexcept {
+	if (test(t)) {
+		reset(t);
+	} else {
+		set(t);
+	}
 }
-template <typename Enum, typename Ty, typename Tr>
-template <typename... T>
-constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::set(T const... t) noexcept {
-	static_assert((valid_flag_v<T> && ...));
-	(update(enum_flags(t)), ...);
-	return *this;
-}
-template <typename Enum, typename Ty, typename Tr>
-template <typename... T>
-constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::reset(T const... t) noexcept {
-	static_assert((valid_flag_v<T> && ...));
-	(update({}, enum_flags(t)), ...);
-	return *this;
-}
-template <typename Enum, typename Ty, typename Tr>
-template <typename... T>
-constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::flip(T const... t) noexcept {
-	static_assert((valid_flag_v<T> && ...));
-	auto do_flip = [&](auto const t) {
-		if (test(t)) {
-			reset(t);
-		} else {
-			set(t);
-		}
-	};
-	(do_flip(t), ...);
-	return *this;
-}
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::assign(enum_flags const mask, bool const value) noexcept {
 	if (value) {
 		set(mask);
@@ -187,22 +164,22 @@ constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::assign(enum_flags 
 	}
 	return *this;
 }
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::update(enum_flags const set, enum_flags const unset) noexcept {
 	m_bits = flags::update(m_bits, set.m_bits, unset.m_bits);
 	return *this;
 }
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::operator|=(enum_flags const mask) noexcept {
 	m_bits |= mask.m_bits;
 	return *this;
 }
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::operator&=(enum_flags const mask) noexcept {
 	m_bits &= mask.m_bits;
 	return *this;
 }
-template <typename Enum, typename Ty, typename Tr>
+template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>& enum_flags<Enum, Ty, Tr>::operator^=(enum_flags const mask) noexcept {
 	m_bits ^= mask.m_bits;
 	return *this;

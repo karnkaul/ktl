@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <array>
@@ -38,13 +38,13 @@ class fixed_vector {
 	static constexpr size_type max_size() noexcept { return N; }
 
 	fixed_vector() = default;
-	explicit fixed_vector(size_type count, T const& t = T{}) noexcept(noexcept_copiable_v);
-	fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v);
+	explicit fixed_vector(size_type count, T const& t = T{}) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
+	fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
 	template <typename InputIt, typename = enable_if_iterator<InputIt>>
-	fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v);
+	fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
 
 	fixed_vector(fixed_vector&& rhs) noexcept(noexcept_movable_v) : fixed_vector() { exchg(*this, rhs); }
-	fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v);
+	fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
 	fixed_vector& operator=(fixed_vector rhs) noexcept(noexcept_movable_v) { return (exchg(*this, rhs), *this); }
 	~fixed_vector() noexcept { clear(); }
 	static void exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v);
@@ -79,7 +79,7 @@ class fixed_vector {
 	void clear() noexcept;
 	iterator insert(const_iterator pos, T const& t) noexcept(noexcept_copiable_v) { return emplace(pos, t); }
 	iterator insert(const_iterator pos, T&& t) noexcept(noexcept_movable_v) { return emplace(pos, std::move(t)); }
-	iterator insert(const_iterator pos, size_type count, T const& t) noexcept(noexcept_copiable_v);
+	iterator insert(const_iterator pos, size_type count, T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
 	template <typename InputIt, typename = enable_if_iterator<InputIt>>
 	iterator insert(const_iterator pos, InputIt first, InputIt last) noexcept(noexcept_copiable_v);
 	iterator insert(const_iterator pos, std::initializer_list<T> ilist) noexcept(noexcept_copiable_v);
@@ -150,12 +150,11 @@ class fixed_vector<T, N>::iter_t {
 	difference_type operator+(iter_t const& rhs) const noexcept { return cast(m_index) + cast(rhs.m_index); }
 	difference_type operator-(iter_t const& rhs) const noexcept { return cast(m_index) - cast(rhs.m_index); }
 
-	friend bool operator==(iter_t const& lhs, iter_t const& rhs) noexcept { return lhs.m_storage == rhs.m_storage && lhs.m_index == rhs.m_index; }
-	friend bool operator!=(iter_t const& lhs, iter_t const& rhs) noexcept { return !(lhs == rhs); }
-	friend bool operator<(iter_t const& lhs, iter_t const& rhs) noexcept { return lhs.m_index < rhs.m_index; }
-	friend bool operator>(iter_t const& lhs, iter_t const& rhs) noexcept { return lhs.m_index > rhs.m_index; }
-	friend bool operator<=(iter_t const& lhs, iter_t const& rhs) noexcept { return lhs.m_index <= rhs.m_index; }
-	friend bool operator>=(iter_t const& lhs, iter_t const& rhs) noexcept { return lhs.m_index >= rhs.m_index; }
+	bool operator==(iter_t const& rhs) const noexcept { return m_storage == rhs.m_storage && m_index == rhs.m_index; }
+	std::partial_ordering operator<=>(iter_t const& rhs) const noexcept {
+		if (m_storage != rhs.m_storage) { return std::partial_ordering::unordered; }
+		return m_index <=> rhs.m_index;
+	}
 
   private:
 	constexpr static difference_type cast(size_type s) noexcept { return static_cast<difference_type>(s); }
@@ -179,22 +178,22 @@ class fixed_vector<T, N>::iter_t {
 };
 
 template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(size_type count, T const& t) noexcept(noexcept_copiable_v) {
+fixed_vector<T, N>::fixed_vector(size_type count, T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	assert(count <= capacity());
 	for (size_type i = 0; i < count; ++i) { push_back(t); }
 }
 template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v) {
+fixed_vector<T, N>::fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	assert(init.size() <= capacity());
 	for (T const& t : init) { push_back(t); }
 }
 template <typename T, std::size_t N>
 template <typename InputIt, typename>
-fixed_vector<T, N>::fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v) {
+fixed_vector<T, N>::fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	for (; first != last; ++first) { push_back(*first); }
 }
 template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) {
+fixed_vector<T, N>::fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	if constexpr (std::is_trivial_v<T>) {
 		std::memcpy(m_storage.data(), rhs.m_storage.data(), rhs.size() * sizeof(T));
 		m_size = rhs.m_size;
@@ -235,7 +234,8 @@ void fixed_vector<T, N>::clear() noexcept {
 	}
 }
 template <typename T, std::size_t N>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::insert(const_iterator pos, size_type count, T const& t) noexcept(noexcept_copiable_v) {
+typename fixed_vector<T, N>::iterator fixed_vector<T, N>::insert(const_iterator pos, size_type count,
+																 T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	if (count == 0) { return pos; }
 	size_type const ret = pos.m_index;
 	for (; count > 0; --count) { pos = emplace(pos, t); }

@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <algorithm>
@@ -19,6 +19,7 @@ struct tagged_store_policy {
 /// \brief Storage for individually tagged Ts; supports popping T via associated tag and bidirectional iteration
 ///
 template <typename T, typename Policy = tagged_store_policy>
+	requires(!std::is_reference_v<T>)
 class tagged_store {
 	template <bool Const>
 	class iter_t;
@@ -33,27 +34,27 @@ class tagged_store {
 
 	static constexpr tag_t null_tag_v = Policy::null_tag_v;
 
-	[[nodiscard]] constexpr tag_t push(T t);
-	constexpr bool pop(tag_t tag);
-	constexpr T* find(tag_t tag) noexcept;
-	constexpr T const* find(tag_t tag) const noexcept;
+	[[nodiscard]] tag_t push(T t);
+	bool pop(tag_t tag);
+	T* find(tag_t tag) noexcept;
+	T const* find(tag_t tag) const noexcept;
 
-	constexpr std::size_t size() const noexcept { return m_store.size(); }
-	constexpr void clear() noexcept { m_store.clear(); }
-	constexpr bool empty() const noexcept { return m_store.empty(); }
+	std::size_t size() const noexcept { return m_store.size(); }
+	void clear() noexcept { m_store.clear(); }
+	bool empty() const noexcept { return m_store.empty(); }
 
-	constexpr iterator begin() noexcept { return m_store.begin(); }
-	constexpr iterator end() noexcept { return m_store.end(); }
-	constexpr reverse_iterator rbegin() noexcept { return reverse_iterator(iterator(m_store.end())); }
-	constexpr reverse_iterator rend() noexcept { return reverse_iterator(iterator(m_store.begin())); }
-	constexpr const_iterator cbegin() noexcept { return m_store.cbegin(); }
-	constexpr const_iterator cend() noexcept { return m_store.cend(); }
-	constexpr const_iterator begin() const noexcept { return m_store.begin(); }
-	constexpr const_iterator end() const noexcept { return m_store.end(); }
-	constexpr const_reverse_iterator crbegin() noexcept { return const_reverse_iterator(const_iterator(m_store.end())); }
-	constexpr const_reverse_iterator crend() noexcept { return const_reverse_iterator(const_iterator(m_store.begin())); }
-	constexpr const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(const_iterator(m_store.end())); }
-	constexpr const_reverse_iterator rend() const noexcept { return const_reverse_iterator(const_iterator(m_store.begin())); }
+	iterator begin() noexcept { return m_store.begin(); }
+	iterator end() noexcept { return m_store.end(); }
+	reverse_iterator rbegin() noexcept { return reverse_iterator(iterator(m_store.end())); }
+	reverse_iterator rend() noexcept { return reverse_iterator(iterator(m_store.begin())); }
+	const_iterator cbegin() noexcept { return m_store.cbegin(); }
+	const_iterator cend() noexcept { return m_store.cend(); }
+	const_iterator begin() const noexcept { return m_store.begin(); }
+	const_iterator end() const noexcept { return m_store.end(); }
+	const_reverse_iterator crbegin() noexcept { return const_reverse_iterator(const_iterator(m_store.end())); }
+	const_reverse_iterator crend() noexcept { return const_reverse_iterator(const_iterator(m_store.begin())); }
+	const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(const_iterator(m_store.end())); }
+	const_reverse_iterator rend() const noexcept { return const_reverse_iterator(const_iterator(m_store.begin())); }
 
   private:
 	struct entry_t {
@@ -67,6 +68,7 @@ class tagged_store {
 };
 
 template <typename T, typename Policy>
+	requires(!std::is_reference_v<T>)
 template <bool Const>
 class tagged_store<T, Policy>::iter_t {
 	using iterator_t = std::conditional_t<Const, typename store_t::const_iterator, typename store_t::iterator>;
@@ -79,29 +81,28 @@ class tagged_store<T, Policy>::iter_t {
 	using pointer = std::conditional_t<Const, T const*, T*>;
 	using reference = std::conditional_t<Const, T const&, T&>;
 
-	constexpr iter_t() = default;
+	iter_t() = default;
 
-	constexpr reference operator*() const noexcept { return m_it->t; }
-	constexpr pointer operator->() const noexcept { return &m_it->t; }
+	reference operator*() const noexcept { return m_it->t; }
+	pointer operator->() const noexcept { return &m_it->t; }
 
-	constexpr iter_t& operator++() noexcept { return (++m_it, *this); }
-	constexpr iter_t& operator--() noexcept { return (--m_it, *this); }
-	constexpr iter_t operator++(int) noexcept {
+	iter_t& operator++() noexcept { return (++m_it, *this); }
+	iter_t& operator--() noexcept { return (--m_it, *this); }
+	iter_t operator++(int) noexcept {
 		auto ret = *this;
 		++m_it;
 		return ret;
 	}
-	constexpr iter_t operator--(int) noexcept {
+	iter_t operator--(int) noexcept {
 		auto ret = *this;
 		--m_it;
 		return ret;
 	}
 
-	friend constexpr bool operator==(iter_t lhs, iter_t rhs) noexcept { return lhs.m_it == rhs.m_it; }
-	friend constexpr bool operator!=(iter_t lhs, iter_t rhs) noexcept { return !(lhs == rhs); }
+	bool operator==(iter_t const&) const noexcept = default;
 
   private:
-	constexpr iter_t(iterator_t it) noexcept : m_it(it) {}
+	iter_t(iterator_t it) noexcept : m_it(it) {}
 
 	iterator_t m_it;
 
@@ -111,14 +112,16 @@ class tagged_store<T, Policy>::iter_t {
 // impl
 
 template <typename T, typename Policy>
-constexpr auto tagged_store<T, Policy>::push(T t) -> tag_t {
+	requires(!std::is_reference_v<T>)
+auto tagged_store<T, Policy>::push(T t) -> tag_t {
 	tag_t ret = ++m_next;
 	m_store.push_back({std::move(t), ret});
 	return ret;
 }
 
 template <typename T, typename Policy>
-constexpr bool tagged_store<T, Policy>::pop(tag_t tag) {
+	requires(!std::is_reference_v<T>)
+bool tagged_store<T, Policy>::pop(tag_t tag) {
 	auto it = std::remove_if(m_store.begin(), m_store.end(), [tag](entry_t const& e) { return e.tag == tag; });
 	if (it != m_store.end()) {
 		m_store.erase(it, m_store.end());
@@ -128,13 +131,15 @@ constexpr bool tagged_store<T, Policy>::pop(tag_t tag) {
 }
 
 template <typename T, typename Policy>
-constexpr T* tagged_store<T, Policy>::find(tag_t tag) noexcept {
+	requires(!std::is_reference_v<T>)
+T* tagged_store<T, Policy>::find(tag_t tag) noexcept {
 	auto it = std::find_if(m_store.begin(), m_store.end(), [tag](entry_t const& e) { return e.tag == tag; });
 	return it != m_store.end() ? &it->t : nullptr;
 }
 
 template <typename T, typename Policy>
-constexpr T const* tagged_store<T, Policy>::find(tag_t tag) const noexcept {
+	requires(!std::is_reference_v<T>)
+T const* tagged_store<T, Policy>::find(tag_t tag) const noexcept {
 	auto it = std::find_if(m_store.begin(), m_store.end(), [tag](entry_t const& e) { return e.tag == tag; });
 	return it != m_store.end() ? &it->t : nullptr;
 }

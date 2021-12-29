@@ -1,5 +1,5 @@
 // KTL single-header library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <cassert>
@@ -43,7 +43,7 @@ class either {
 	constexpr either(either&& rhs) noexcept(noexcept_movable_v) : either() { exchg(*this, rhs); }
 	constexpr either(either const& rhs) noexcept(noexcept_copiable_v);
 	constexpr either& operator=(either rhs) noexcept(noexcept_movable_v) { return (exchg(*this, rhs), *this); }
-	~either() noexcept { destroy(); }
+	constexpr ~either() noexcept { destroy(); }
 
 	///
 	/// \brief Check which type is currently held
@@ -82,8 +82,9 @@ class either {
 	///
 	/// \brief Visitor for T and U
 	///
-	template <typename F, typename = std::enable_if_t<visitable_v<F>>>
-	constexpr void visit(F&& func) const noexcept;
+	template <typename F>
+		requires(visitable_v<F>)
+	constexpr void visit(F&& func) const noexcept { do_visit(std::forward<F>(func)); }
 
   private:
 	static constexpr void exchg(either& lhs, either& rhs) noexcept(noexcept_movable_v);
@@ -97,7 +98,9 @@ class either {
 	static constexpr void destruct(Ty const* ptr) noexcept {
 		ptr->~Ty();
 	}
-	void destroy() noexcept;
+	constexpr void destroy() noexcept;
+	template <typename F>
+	constexpr void do_visit(F&& func) const noexcept;
 
 	union {
 		T t_;
@@ -208,8 +211,8 @@ constexpr void either<T, U>::set(T& out_t, U& out_u) const noexcept {
 }
 
 template <typename T, typename U>
-template <typename F, typename>
-constexpr void either<T, U>::visit(F&& func) const noexcept {
+template <typename F>
+constexpr void either<T, U>::do_visit(F&& func) const noexcept {
 	if (contains<T>()) {
 		func(get<T>());
 	} else {
@@ -242,7 +245,7 @@ constexpr void either<T, U>::asymm_exchg(either& tsrc, either& usrc) noexcept(no
 }
 
 template <typename T, typename U>
-void either<T, U>::destroy() noexcept {
+constexpr void either<T, U>::destroy() noexcept {
 	if (m_u) {
 		destruct(&u_);
 	} else {

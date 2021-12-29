@@ -1,14 +1,20 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <cassert>
+#include <concepts>
 #include <cstring>
 #include <ostream>
 #include <sstream>
 #include <string_view>
 
 namespace ktl {
+template <typename T>
+concept ostreamable = requires(std::ostream& o, T const& t) {
+	{ o << t } -> std::convertible_to<std::ostream&>;
+};
+
 ///
 /// \brief Default formatter
 /// Interpolation token: {X} where X is an optional C style format specifier without the leading % (eg {.3f}, {x})
@@ -19,20 +25,13 @@ struct str_formatter;
 ///
 /// \brief Format using Ftr and return a std::string
 ///
-template <typename Ftr = str_formatter, typename... Args>
+template <typename Ftr = str_formatter, ostreamable... Args>
 std::string format(std::string_view fmt, Args const&... args);
 
 // impl
 
 namespace detail {
-template <typename T, typename = void>
-struct ostream_defined : std::false_type {};
-template <typename T>
-struct ostream_defined<T, std::void_t<decltype(std::declval<std::ostream&>() << std::declval<T const&>())>> : std::true_type {};
-template <typename T>
-constexpr bool ostream_operator_defined_v = ostream_defined<T>::value;
-
-template <typename Ftr, typename T, typename... Ts>
+template <typename Ftr, ostreamable T, ostreamable... Ts>
 std::ostream& format_str(std::ostream& out, std::string_view fmt, T const& t, Ts const&... ts) {
 	std::size_t const bb = fmt.find(Ftr::begin_v);
 	std::size_t const be = fmt.find(Ftr::end_v);
@@ -54,7 +53,7 @@ struct str_formatter {
 	static constexpr char begin_v = '{';
 	static constexpr char end_v = '}';
 
-	template <typename T>
+	template <ostreamable T>
 	std::ostream& operator()(std::ostream& out, std::string_view fmt_spec, T const& t) {
 		if constexpr (std::is_trivial_v<T>) {
 			if (fmt_spec.size() > 2) {
@@ -75,9 +74,8 @@ struct str_formatter {
 	}
 };
 
-template <typename Ftr, typename... Args>
+template <typename Ftr, ostreamable... Args>
 std::string format(std::string_view fmt, Args const&... args) {
-	static_assert((detail::ostream_operator_defined_v<Args> && ...));
 	std::stringstream str;
 	if constexpr (sizeof...(Args) > 0) {
 		detail::format_str<Ftr>(str, fmt, args...);

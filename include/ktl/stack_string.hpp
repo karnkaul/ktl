@@ -1,5 +1,5 @@
 // KTL header-only library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <cassert>
@@ -11,6 +11,7 @@ namespace ktl {
 /// \brief Wrapper for stack allocated char buffer (null terminated)
 ///
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 class stack_string;
 
 namespace literals {
@@ -18,8 +19,8 @@ constexpr stack_string<64> operator""_ss(char const* str, std::size_t size) noex
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 class stack_string {
-	static_assert(Capacity > 0);
 
   public:
 	inline static constexpr std::size_t npos = std::string::npos;
@@ -58,6 +59,7 @@ template <std::size_t Capacity>
 constexpr stack_string<Capacity> operator+(stack_string<Capacity> const& lhs, stack_string<Capacity> const& rhs) noexcept;
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>::stack_string(char const (&arr)[N]) noexcept {
 	std::size_t i = 0;
@@ -66,6 +68,7 @@ constexpr stack_string<Capacity>::stack_string(char const (&arr)[N]) noexcept {
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 template <typename... Args>
 constexpr stack_string<Capacity>::stack_string(std::string_view fmt, Args const&... args) noexcept {
 	if constexpr (sizeof...(Args) == 0) {
@@ -79,6 +82,7 @@ constexpr stack_string<Capacity>::stack_string(std::string_view fmt, Args const&
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>& stack_string<Capacity>::operator+=(stack_string<N> const& rhs) noexcept {
 	char* start = m_str + m_extent;
@@ -90,6 +94,7 @@ constexpr stack_string<Capacity>& stack_string<Capacity>::operator+=(stack_strin
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 constexpr std::size_t stack_string<Capacity>::len(char const* str) noexcept {
 	std::size_t ret{};
 	for (; str && *str; ++str) { ++ret; }
@@ -97,6 +102,7 @@ constexpr std::size_t stack_string<Capacity>::len(char const* str) noexcept {
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 constexpr void stack_string<Capacity>::term(std::size_t end) noexcept {
 	assert(end < Capacity);
 	m_extent = end;
@@ -104,6 +110,7 @@ constexpr void stack_string<Capacity>::term(std::size_t end) noexcept {
 }
 
 template <std::size_t Capacity>
+	requires(Capacity > 0)
 constexpr stack_string<Capacity> operator+(stack_string<Capacity> const& lhs, stack_string<Capacity> const& rhs) noexcept {
 	auto ret = lhs;
 	return ret += rhs;

@@ -1,5 +1,5 @@
 // KTL single-header library
-// Requirements: C++17
+// Requirements: C++20
 
 #pragma once
 #include <memory>
@@ -10,37 +10,44 @@ namespace ktl {
 /// \brief Callable wrapper that cannot be copied, only moved
 ///
 template <typename>
-class move_only_function;
+class kfunction;
 
 template <typename R, typename... Args>
-class move_only_function<R(Args...)> {
+class kfunction<R(Args...)> {
 	template <typename F>
-	using enable_if_not_mof_t = std::enable_if_t<!std::is_same_v<std::decay_t<F>, move_only_function<R(Args...)>>>;
+	static constexpr bool is_mof_v = std::is_same_v<std::remove_cv_t<F>, kfunction<R(Args...)>>;
 
   public:
-	move_only_function() = default;
+	kfunction() = default;
 	///
 	/// \brief Construct via callable
 	///
-	template <typename F, typename = enable_if_not_mof_t<F>>
-	move_only_function(F f) : m_storage(std::make_unique<model_t<F>>(std::move(f))) {}
+	template <typename F>
+		requires(!is_mof_v<F> && std::is_invocable_r_v<R, F, Args...>)
+	kfunction(F f) : m_storage(std::make_unique<model_t<F>>(std::move(f))) {}
 	///
 	/// \brief Assign a callable
 	///
-	template <typename F, typename = enable_if_not_mof_t<F>>
-	move_only_function& operator=(F&& f) {
-		m_storage = std::make_unique<model_t<F>>(std::forward<F>(f));
+	template <typename F>
+		requires(!is_mof_v<F> && std::is_invocable_r_v<R, F, Args...>)
+	kfunction& operator=(F f) {
+		m_storage = std::make_unique<model_t<F>>(std::move(f));
 		return *this;
 	}
+
+	kfunction(kfunction&&) = default;
+	kfunction& operator=(kfunction&&) = default;
+	kfunction(kfunction const&) = delete;
+	kfunction& operator=(kfunction const&) = delete;
 
 	///
 	/// \brief Reset assigned callable, if any
 	///
-	move_only_function& operator=(std::nullptr_t) { return (reset(), *this); }
+	kfunction& operator=(std::nullptr_t) { return (reset(), *this); }
 	///
 	/// \brief Reset assigned callable, if any
 	///
-	move_only_function& reset() { return (m_storage.reset(), *this); }
+	kfunction& reset() { return (m_storage.reset(), *this); }
 
 	///
 	/// \brief Check if a callable has been assigned
@@ -53,7 +60,7 @@ class move_only_function<R(Args...)> {
 	///
 	/// \brief Invoke assigned callable (assumed present)
 	///
-	R operator()(Args... args) const { return m_storage->call(std::move(args)...); }
+	R operator()(Args... args) const { return m_storage->call(args...); }
 
   private:
 	struct base_t {
@@ -65,15 +72,8 @@ class move_only_function<R(Args...)> {
 		F func;
 		template <typename... T>
 		model_t(T&&... t) : func(std::forward<T>(t)...) {}
-		R call(Args... args) override {
-			if constexpr (std::is_void_v<R>) {
-				func(std::move(args)...);
-			} else {
-				return func(std::move(args)...);
-			}
-		}
+		R call(Args... args) override { return func(args...); }
 	};
 	std::unique_ptr<base_t> m_storage;
 };
-
 } // namespace ktl
