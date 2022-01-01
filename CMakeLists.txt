@@ -10,7 +10,7 @@ set(FETCHCONTENT_QUIET OFF)
 FetchContent_Declare(
   cmake-utils
   GIT_REPOSITORY https://github.com/karnkaul/cmake-utils
-  GIT_TAG v1.0
+  GIT_TAG v1.0.1
 )
 FetchContent_MakeAvailable(cmake-utils)
 FetchContent_GetProperties(cmake-utils)
@@ -69,4 +69,4 @@ endif()
 
 # install and export
 include("${cmake-utils_SOURCE_DIR}/cmake-utils.cmake")
-install_and_export_target(${PROJECT_NAME})
+install_and_export_target(TARGET ${PROJECT_NAME})
