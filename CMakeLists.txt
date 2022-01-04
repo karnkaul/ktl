@@ -11,6 +11,7 @@ FetchContent_Declare(
   cmake-utils
   GIT_REPOSITORY https://github.com/karnkaul/cmake-utils
   GIT_TAG v1.0.1
+  GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(cmake-utils)
 FetchContent_GetProperties(cmake-utils)
@@ -30,35 +31,38 @@ target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
   "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
-target_sources(${PROJECT_NAME} PRIVATE
-  include/ktl/async/async_queue.hpp
-  include/ktl/async/kasync.hpp
-  include/ktl/async/kfunction.hpp
-  include/ktl/async/kfuture.hpp
-  include/ktl/async/kthread.hpp
-  include/ktl/async/shared_kmutex.hpp
-  include/ktl/async/kmutex.hpp
 
-  include/ktl/enum_flags/bitflags.hpp
-  include/ktl/enum_flags/enum_flags.hpp
-  include/ktl/enum_flags/enum_traits.hpp
-  include/ktl/enum_flags/enumerate_enum.hpp
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+  target_sources(${PROJECT_NAME} PRIVATE
+    include/ktl/async/async_queue.hpp
+    include/ktl/async/kasync.hpp
+    include/ktl/async/kfunction.hpp
+    include/ktl/async/kfuture.hpp
+    include/ktl/async/kthread.hpp
+    include/ktl/async/shared_kmutex.hpp
+    include/ktl/async/kmutex.hpp
 
-  include/ktl/debug_trap.hpp
-  include/ktl/delegate.hpp
-  include/ktl/either.hpp
-  include/ktl/erased_semantics.hpp
-  include/ktl/expected.hpp
-  include/ktl/fixed_any.hpp
-  include/ktl/fixed_vector.hpp
-  include/ktl/n_tree.hpp
-  include/ktl/not_null.hpp
-  include/ktl/stack_string.hpp
-  include/ktl/str_format.hpp
-  include/ktl/tagged_store.hpp
-)
-get_target_property(sources ${PROJECT_NAME} SOURCES)
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${sources})
+    include/ktl/enum_flags/bitflags.hpp
+    include/ktl/enum_flags/enum_flags.hpp
+    include/ktl/enum_flags/enum_traits.hpp
+    include/ktl/enum_flags/enumerate_enum.hpp
+
+    include/ktl/debug_trap.hpp
+    include/ktl/delegate.hpp
+    include/ktl/either.hpp
+    include/ktl/erased_semantics.hpp
+    include/ktl/expected.hpp
+    include/ktl/fixed_any.hpp
+    include/ktl/fixed_vector.hpp
+    include/ktl/n_tree.hpp
+    include/ktl/not_null.hpp
+    include/ktl/stack_string.hpp
+    include/ktl/str_format.hpp
+    include/ktl/tagged_store.hpp
+  )
+  get_target_property(sources ${PROJECT_NAME} SOURCES)
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${sources})
+endif()
 
 # version
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}_version.hpp.in")
