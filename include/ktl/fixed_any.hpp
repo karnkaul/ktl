@@ -98,12 +98,12 @@ class fixed_any final {
 
 template <std::size_t N>
 constexpr fixed_any<N>::fixed_any(fixed_any&& rhs) noexcept : m_erased(rhs.m_erased) {
-	m_erased->move_construct(&rhs.m_bytes, &m_bytes);
+	if (m_erased) { m_erased->move_construct(&rhs.m_bytes, &m_bytes); }
 }
 
 template <std::size_t N>
 constexpr fixed_any<N>::fixed_any(fixed_any const& rhs) : m_erased(rhs.m_erased) {
-	m_erased->copy_construct(&rhs.m_bytes, &m_bytes);
+	if (m_erased) { m_erased->copy_construct(&rhs.m_bytes, &m_bytes); }
 }
 
 template <std::size_t N>
