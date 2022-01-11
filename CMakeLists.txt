@@ -2,7 +2,19 @@ cmake_minimum_required(VERSION 3.14)
 
 enable_language(CXX)
 
-project(ktl)
+set(project_name ktl)
+set(${project_name}_version 1.0.1)
+set(cxx_standard cxx_std_20)
+
+project(${project_name} VERSION ${${project_name}_version})
+set(is_root_project OFF)	# indicate if this is the top-level project
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(is_root_project ON)
+  message(STATUS "${PROJECT_NAME} is top level")
+endif()
+
+# options
+option(KTL_INSTALL "Install ktl headers" ${is_root_project})
 
 # cmake-utils
 include(FetchContent)
@@ -16,24 +28,23 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cmake-utils)
 FetchContent_GetProperties(cmake-utils)
 
-set(${PROJECT_NAME}_version 1.0.0)
-set(${PROJECT_NAME}_soversion 1)
-add_library(${PROJECT_NAME} INTERFACE)
-add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-set_property(TARGET ${PROJECT_NAME} PROPERTY VERSION ${${PROJECT_NAME}_version})
-set_property(TARGET ${PROJECT_NAME} PROPERTY SOVERSION ${${PROJECT_NAME}_soversion})
-set_property(TARGET ${PROJECT_NAME} PROPERTY INTERFACE_${PROJECT_NAME}_MAJOR_VERSION ${${PROJECT_NAME}_soversion})
-set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY COMPATIBLE_INTERFACE_STRING ${PROJECT_NAME}_MAJOR_VERSION)
+set(${project_name}_soversion ${PROJECT_VERSION_MAJOR})
+add_library(${project_name} INTERFACE)
+add_library(${project_name}::${project_name} ALIAS ${project_name})
+set_property(TARGET ${project_name} PROPERTY VERSION ${${project_name}_version})
+set_property(TARGET ${project_name} PROPERTY SOVERSION ${${project_name}_soversion})
+set_property(TARGET ${project_name} PROPERTY INTERFACE_${project_name}_MAJOR_VERSION ${${project_name}_soversion})
+set_property(TARGET ${project_name} APPEND PROPERTY COMPATIBLE_INTERFACE_STRING ${project_name}_MAJOR_VERSION)
 
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
-target_include_directories(${PROJECT_NAME} SYSTEM INTERFACE
+target_compile_features(${project_name} INTERFACE cxx_std_20)
+target_include_directories(${project_name} SYSTEM INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
   "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
-  target_sources(${PROJECT_NAME} PRIVATE
+  target_sources(${project_name} PRIVATE
     include/ktl/async/async_queue.hpp
     include/ktl/async/kasync.hpp
     include/ktl/async/kfunction.hpp
@@ -60,7 +71,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/str_format.hpp
     include/ktl/tagged_store.hpp
   )
-  get_target_property(sources ${PROJECT_NAME} SOURCES)
+  get_target_property(sources ${project_name} SOURCES)
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${sources})
 endif()
 
@@ -72,5 +83,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}_version.hpp.in")
 endif()
 
 # install and export
-include("${cmake-utils_SOURCE_DIR}/cmake-utils.cmake")
-install_and_export_target(TARGET ${PROJECT_NAME})
+if(KTL_INSTALL)
+  include("${cmake-utils_SOURCE_DIR}/cmake-utils.cmake")
+  install_and_export_target(TARGET ${PROJECT_NAME})
+endif()
