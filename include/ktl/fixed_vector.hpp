@@ -47,7 +47,6 @@ class fixed_vector {
 	fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
 	fixed_vector& operator=(fixed_vector rhs) noexcept(noexcept_movable_v) { return (exchg(*this, rhs), *this); }
 	~fixed_vector() noexcept { clear(); }
-	static void exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v);
 
 	T& at(size_type index) noexcept;
 	T const& at(size_type index) const noexcept;
@@ -94,8 +93,12 @@ class fixed_vector {
 	void pop_back() noexcept;
 	void resize(size_type count, T const& t = {}) noexcept;
 
+	bool operator==(fixed_vector const& rhs) const noexcept;
+
   private:
 	using storage_t = std::array<std::aligned_storage_t<sizeof(T), alignof(T)>, N>;
+
+	static void exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v);
 
 	template <typename Ret, typename St>
 	static Ret cast(St& st, size_type index) noexcept {
@@ -108,11 +111,6 @@ class fixed_vector {
 	template <bool IsConst>
 	friend class iter_t;
 };
-
-template <typename T, std::size_t N>
-bool operator==(fixed_vector<T, N> const& lhs, fixed_vector<T, N> const& rhs) noexcept;
-template <typename T, std::size_t N>
-bool operator!=(fixed_vector<T, N> const& lhs, fixed_vector<T, N> const& rhs) noexcept;
 
 // impl
 
@@ -307,17 +305,12 @@ void fixed_vector<T, N>::resize(size_type count, T const& t) noexcept {
 	while (m_size > count) { pop_back(); }
 	while (count > m_size) { push_back(t); }
 }
-
 template <typename T, std::size_t N>
-bool operator==(fixed_vector<T, N> const& lhs, fixed_vector<T, N> const& rhs) noexcept {
-	if (lhs.size() != rhs.size()) { return false; }
-	for (typename fixed_vector<T, N>::size_type i = 0; i < lhs.size(); ++i) {
-		if (lhs[i] != rhs[i]) { return false; }
+bool fixed_vector<T, N>::operator==(fixed_vector<T, N> const& rhs) const noexcept {
+	if (size() != rhs.size()) { return false; }
+	for (typename fixed_vector<T, N>::size_type i = 0; i < size(); ++i) {
+		if ((*this)[i] != rhs[i]) { return false; }
 	}
 	return true;
-}
-template <typename T, std::size_t N>
-bool operator!=(fixed_vector<T, N> const& lhs, fixed_vector<T, N> const& rhs) noexcept {
-	return !(lhs == rhs);
 }
 } // namespace ktl

@@ -66,7 +66,7 @@ Free functions for working with integral bit flags.
 
 x86/x64 debugger trap/break.
 
-### `delegate.hpp`
+#### `delegate.hpp`
 
 Tagged observer store with RAII signals.
 
@@ -97,6 +97,14 @@ Models a "forward" N-tree (no parent link) via `std::forward_list`.
 #### `not_null.hpp`
 
 Wrapper for raw / smart pointers that is restricted from being null.
+
+#### `ring_buffer.hpp`
+
+Rotating ring-buffer using contiguous storage (`std::vector<T>` by default). Overwrites on overflow.
+
+#### `ring_counter.hpp`
+
+Fixed-size rotating integral counter. Supports increment/decrement.
 
 #### `stack_string.hpp`
 

@@ -67,6 +67,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/fixed_vector.hpp
     include/ktl/n_tree.hpp
     include/ktl/not_null.hpp
+    include/ktl/ring_buffer.hpp
+    include/ktl/ring_counter.hpp
     include/ktl/stack_string.hpp
     include/ktl/str_format.hpp
     include/ktl/tagged_store.hpp
