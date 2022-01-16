@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.0.1)
+set(${project_name}_version 1.0.2)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -64,6 +64,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/erased_semantics.hpp
     include/ktl/expected.hpp
     include/ktl/fixed_any.hpp
+    include/ktl/fixed_pimpl.hpp
     include/ktl/fixed_vector.hpp
     include/ktl/n_tree.hpp
     include/ktl/not_null.hpp
