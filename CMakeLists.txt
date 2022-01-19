@@ -66,6 +66,8 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/fixed_any.hpp
     include/ktl/fixed_pimpl.hpp
     include/ktl/fixed_vector.hpp
+    include/ktl/koverloaded.hpp
+    include/ktl/kvariant.hpp
     include/ktl/n_tree.hpp
     include/ktl/not_null.hpp
     include/ktl/ring_buffer.hpp

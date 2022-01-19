@@ -6,25 +6,18 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include "koverloaded.hpp"
 
 namespace ktl {
-///
-/// \brief Wrapper for visitor
-///
-template <typename... T>
-struct overloaded : T... {
-	using T::operator()...;
-};
-template <typename... T>
-overloaded(T...) -> overloaded<T...>;
-
 ///
 /// \brief RAII union of two types
 ///
 template <typename T, typename U>
 class either {
-	template <typename Ty>
-	static constexpr bool visitable_v = std::is_invocable_v<Ty, T const&>&& std::is_invocable_v<Ty, U const&>;
+	template <typename V>
+	static constexpr bool visitable_v = std::is_invocable_v<V, T>&& std::is_invocable_v<V, U>;
+	template <typename V>
+	using visit_ret_t = std::invoke_result_t<V, T>;
 	static constexpr bool noexcept_movable_v = std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_constructible_v<U>;
 	static constexpr bool noexcept_copiable_v = std::is_nothrow_copy_constructible_v<T> && std::is_nothrow_copy_constructible_v<U>;
 
@@ -82,14 +75,16 @@ class either {
 	///
 	/// \brief Visitor for T and U
 	///
-	template <typename F>
-		requires(visitable_v<F>)
-	constexpr void visit(F&& func) const noexcept { do_visit(std::forward<F>(func)); }
+	template <typename Visitor>
+		requires(visitable_v<Visitor>)
+	constexpr visit_ret_t<Visitor> visit(Visitor&& func) const noexcept { return visit(*this, std::forward<Visitor>(func)); }
 
   private:
 	static constexpr void exchg(either& lhs, either& rhs) noexcept(noexcept_movable_v);
 	static constexpr void asymm_exchg(either& tsrc, either& usrc) noexcept(noexcept_movable_v);
 
+	template <typename E, typename V>
+	static constexpr visit_ret_t<V> visit(E&& either, V&& visitor) noexcept;
 	template <typename Ty, typename... Args>
 	static constexpr void construct(Ty* ptr, Args&&... args) noexcept(std::is_nothrow_constructible_v<Ty, Args...>) {
 		new (ptr) Ty(std::forward<Args>(args)...);
@@ -99,8 +94,6 @@ class either {
 		ptr->~Ty();
 	}
 	constexpr void destroy() noexcept;
-	template <typename F>
-	constexpr void do_visit(F&& func) const noexcept;
 
 	union {
 		T t_;
@@ -211,12 +204,12 @@ constexpr void either<T, U>::set(T& out_t, U& out_u) const noexcept {
 }
 
 template <typename T, typename U>
-template <typename F>
-constexpr void either<T, U>::do_visit(F&& func) const noexcept {
-	if (contains<T>()) {
-		func(get<T>());
+template <typename E, typename V>
+constexpr auto either<T, U>::visit(E&& either, V&& visitor) noexcept -> visit_ret_t<V> {
+	if (either.template contains<T>()) {
+		return visitor(either.template get<T>());
 	} else {
-		func(get<U>());
+		return visitor(either.template get<U>());
 	}
 }
 
