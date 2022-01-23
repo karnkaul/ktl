@@ -2,9 +2,7 @@
 // Requirements: C++20
 
 #pragma once
-#include <cassert>
-#include <cstring>
-#include <string>
+#include "str_format.hpp"
 
 namespace ktl {
 ///
@@ -18,24 +16,31 @@ namespace literals {
 constexpr stack_string<64> operator""_ss(char const* str, std::size_t size) noexcept;
 }
 
+///
+/// \brief Stream buffer view that uses a fixed-range buffer
+///
+struct streambuf_view : std::streambuf {
+	template <std::size_t Size>
+	explicit streambuf_view(char (&buf)[Size]) noexcept : streambuf_view(buf, Size) {}
+	streambuf_view(char* begin, std::size_t extent) noexcept { setp(begin, begin + extent); }
+};
+
 template <std::size_t Capacity>
 	requires(Capacity > 0)
 class stack_string {
-
   public:
 	inline static constexpr std::size_t npos = std::string::npos;
 	inline static constexpr std::size_t capacity_v = Capacity;
 
-	constexpr stack_string() = default;
-
+	constexpr stack_string(std::string_view str = {}) noexcept { write(str); }
 	template <std::size_t N>
 	constexpr stack_string(char const (&arr)[N]) noexcept;
-	template <typename... Args>
-	constexpr stack_string(std::string_view fmt, Args const&... args) noexcept;
-	stack_string(std::string const& str) noexcept : stack_string(str.data(), str.size()) {}
+	constexpr stack_string(std::string const& str) noexcept { write(str); }
+	template <ostreamable Arg, ostreamable... Args>
+	stack_string(std::string_view fmt, Arg const& arg, Args const&... args) noexcept;
 
 	template <std::size_t N>
-	constexpr stack_string(stack_string<N> const& rhs) noexcept : stack_string(rhs.data(), rhs.size()) {}
+	constexpr stack_string(stack_string<N> const& rhs) noexcept : stack_string(rhs.get()) {}
 	template <std::size_t N>
 	constexpr stack_string& operator+=(stack_string<N> const& rhs) noexcept;
 
@@ -49,6 +54,7 @@ class stack_string {
 
   private:
 	static constexpr std::size_t len(char const* str) noexcept;
+	constexpr void write(std::string_view str) noexcept;
 	constexpr void term(std::size_t end) noexcept;
 
 	char m_str[Capacity] = {};
@@ -62,34 +68,24 @@ template <std::size_t Capacity>
 	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>::stack_string(char const (&arr)[N]) noexcept {
-	std::size_t i = 0;
-	for (; i < N && i < Capacity - 1; ++i) { m_str[i] = arr[i]; }
-	term(i);
+	write(arr);
 }
 
 template <std::size_t Capacity>
 	requires(Capacity > 0)
-template <typename... Args>
-constexpr stack_string<Capacity>::stack_string(std::string_view fmt, Args const&... args) noexcept {
-	if constexpr (sizeof...(Args) == 0) {
-		std::size_t i = 0;
-		for (; i < fmt.size() && i < Capacity - 1; ++i) { m_str[i] = fmt[i]; }
-		term(i);
-	} else {
-		int const written = std::snprintf(m_str, Capacity, fmt.data(), args...);
-		if (written > 0) { m_extent = written >= int(Capacity) ? Capacity - 1 : static_cast<std::size_t>(written); }
-	}
+template <ostreamable Arg, ostreamable... Args>
+stack_string<Capacity>::stack_string(std::string_view fmt, Arg const& arg, Args const&... args) noexcept {
+	streambuf_view buf(m_str);
+	std::iostream stream(&buf);
+	detail::format_str<str_formatter>(stream, fmt, arg, args...);
+	term(len(m_str));
 }
 
 template <std::size_t Capacity>
 	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>& stack_string<Capacity>::operator+=(stack_string<N> const& rhs) noexcept {
-	char* start = m_str + m_extent;
-	std::size_t const max_extent = Capacity - m_extent - 1;
-	std::size_t const extent = rhs.size() < max_extent ? rhs.size() : max_extent;
-	std::memcpy(start, rhs.data(), extent);
-	m_extent += extent;
+	write(rhs);
 	return *this;
 }
 
@@ -99,6 +95,14 @@ constexpr std::size_t stack_string<Capacity>::len(char const* str) noexcept {
 	std::size_t ret{};
 	for (; str && *str; ++str) { ++ret; }
 	return ret;
+}
+
+template <std::size_t Capacity>
+	requires(Capacity > 0)
+constexpr void stack_string<Capacity>::write(std::string_view str) noexcept {
+	std::size_t i = 0U;
+	for (; i < str.size() && m_extent + i + 1U < Capacity; ++i) { m_str[m_extent + i] = str[i]; }
+	term(m_extent + i);
 }
 
 template <std::size_t Capacity>

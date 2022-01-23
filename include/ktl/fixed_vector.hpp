@@ -16,7 +16,7 @@ namespace ktl {
 /// \brief Fixed-size vector-like container using bytearray as storage
 /// Refer to std::vector for API documentation
 ///
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 class fixed_vector {
 	static_assert(!std::is_reference_v<T>, "T must be an object type");
 	template <typename U>
@@ -35,7 +35,7 @@ class fixed_vector {
 	using reverse_iterator = std::reverse_iterator<iterator>;
 	using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-	static constexpr size_type max_size() noexcept { return N; }
+	static constexpr size_type max_size() noexcept { return Capacity; }
 
 	fixed_vector() = default;
 	explicit fixed_vector(size_type count, T const& t = T{}) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T>;
@@ -72,8 +72,8 @@ class fixed_vector {
 
 	bool empty() const noexcept { return m_size == 0; }
 	size_type size() const noexcept { return m_size; }
-	constexpr size_type capacity() const noexcept { return N; }
-	bool has_space() const noexcept { return m_size < N; }
+	constexpr size_type capacity() const noexcept { return Capacity; }
+	bool has_space() const noexcept { return m_size < Capacity; }
 
 	void clear() noexcept;
 	iterator insert(const_iterator pos, T const& t) noexcept(noexcept_copiable_v) { return emplace(pos, t); }
@@ -96,7 +96,7 @@ class fixed_vector {
 	bool operator==(fixed_vector const& rhs) const noexcept;
 
   private:
-	using storage_t = std::array<std::aligned_storage_t<sizeof(T), alignof(T)>, N>;
+	using storage_t = std::array<std::aligned_storage_t<sizeof(T), alignof(T)>, Capacity>;
 
 	static void exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v);
 
@@ -114,9 +114,9 @@ class fixed_vector {
 
 // impl
 
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 template <bool IsConst>
-class fixed_vector<T, N>::iter_t {
+class fixed_vector<T, Capacity>::iter_t {
 	template <typename U>
 	using type_t = std::conditional_t<IsConst, U const, U>;
 
@@ -127,7 +127,7 @@ class fixed_vector<T, N>::iter_t {
 
 	using pointer = type_t<T>*;
 	using reference = type_t<T>&;
-	using storage_t = type_t<fixed_vector<T, N>::storage_t>;
+	using storage_t = type_t<fixed_vector<T, Capacity>::storage_t>;
 
 	iter_t() = default;
 	// Implicit conversion to const iter_t
@@ -172,26 +172,26 @@ class fixed_vector<T, N>::iter_t {
 	size_type m_index{};
 	mutable pointer m_ptr{};
 
-	friend class fixed_vector<T, N>;
+	friend class fixed_vector<T, Capacity>;
 };
 
-template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(size_type count, T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
+template <typename T, std::size_t Capacity>
+fixed_vector<T, Capacity>::fixed_vector(size_type count, T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	assert(count <= capacity());
 	for (size_type i = 0; i < count; ++i) { push_back(t); }
 }
-template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
+template <typename T, std::size_t Capacity>
+fixed_vector<T, Capacity>::fixed_vector(std::initializer_list<T> init) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	assert(init.size() <= capacity());
 	for (T const& t : init) { push_back(t); }
 }
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 template <typename InputIt, typename>
-fixed_vector<T, N>::fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
+fixed_vector<T, Capacity>::fixed_vector(InputIt first, InputIt last) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	for (; first != last; ++first) { push_back(*first); }
 }
-template <typename T, std::size_t N>
-fixed_vector<T, N>::fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
+template <typename T, std::size_t Capacity>
+fixed_vector<T, Capacity>::fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
 	if constexpr (std::is_trivial_v<T>) {
 		std::memcpy(m_storage.data(), rhs.m_storage.data(), rhs.size() * sizeof(T));
 		m_size = rhs.m_size;
@@ -199,8 +199,8 @@ fixed_vector<T, N>::fixed_vector(fixed_vector const& rhs) noexcept(noexcept_copi
 		for (T const& t : rhs) { push_back(t); }
 	}
 }
-template <typename T, std::size_t N>
-void fixed_vector<T, N>::exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v) {
+template <typename T, std::size_t Capacity>
+void fixed_vector<T, Capacity>::exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(noexcept_movable_v) {
 	if constexpr (std::is_trivial_v<T>) {
 		std::swap(lhs.m_storage, rhs.m_storage);
 		std::swap(lhs.m_size, rhs.m_size);
@@ -213,47 +213,47 @@ void fixed_vector<T, N>::exchg(fixed_vector& lhs, fixed_vector& rhs) noexcept(no
 		for (auto& t : tmp) { rhs.push_back(std::move(t)); }
 	}
 }
-template <typename T, std::size_t N>
-T& fixed_vector<T, N>::at(size_type index) noexcept {
+template <typename T, std::size_t Capacity>
+T& fixed_vector<T, Capacity>::at(size_type index) noexcept {
 	assert(index < size());
 	return *cast<T*>(m_storage, index);
 }
-template <typename T, std::size_t N>
-T const& fixed_vector<T, N>::at(size_type index) const noexcept {
+template <typename T, std::size_t Capacity>
+T const& fixed_vector<T, Capacity>::at(size_type index) const noexcept {
 	assert(index < size());
 	return *cast<T const*>(m_storage, index);
 }
-template <typename T, std::size_t N>
-void fixed_vector<T, N>::clear() noexcept {
+template <typename T, std::size_t Capacity>
+void fixed_vector<T, Capacity>::clear() noexcept {
 	if constexpr (std::is_trivial_v<T>) {
 		m_size = 0;
 	} else {
 		while (!empty()) { pop_back(); }
 	}
 }
-template <typename T, std::size_t N>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::insert(const_iterator pos, size_type count,
-																 T const& t) noexcept(noexcept_copiable_v) requires std::is_copy_constructible_v<T> {
+template <typename T, std::size_t Capacity>
+auto fixed_vector<T, Capacity>::insert(const_iterator pos, size_type count, T const& t) noexcept(noexcept_copiable_v)
+	-> iterator requires std::is_copy_constructible_v<T> {
 	if (count == 0) { return pos; }
 	size_type const ret = pos.m_index;
 	for (; count > 0; --count) { pos = emplace(pos, t); }
 	return iterator(&m_storage, ret);
 }
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 template <typename InputIt, typename>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::insert(const_iterator pos, InputIt first, InputIt last) noexcept(noexcept_copiable_v) {
+auto fixed_vector<T, Capacity>::insert(const_iterator pos, InputIt first, InputIt last) noexcept(noexcept_copiable_v) -> iterator {
 	if (std::distance(first, last) == 0) { return pos; }
 	size_type const ret = pos.m_index;
 	for (; first != last; ++first) { pos = emplace(pos, *first); }
 	return iterator(&m_storage, ret);
 }
-template <typename T, std::size_t N>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::insert(const_iterator pos, std::initializer_list<T> ilist) noexcept(noexcept_copiable_v) {
+template <typename T, std::size_t Capacity>
+auto fixed_vector<T, Capacity>::insert(const_iterator pos, std::initializer_list<T> ilist) noexcept(noexcept_copiable_v) -> iterator {
 	return insert(pos, ilist.begin(), ilist.end());
 }
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 template <typename... Args>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::emplace(const_iterator pos, Args&&... u) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
+auto fixed_vector<T, Capacity>::emplace(const_iterator pos, Args&&... u) noexcept(std::is_nothrow_constructible_v<T, Args...>) -> iterator {
 	assert(has_space());
 	if (pos == end()) {
 		emplace_back(std::forward<Args>(u)...);
@@ -267,14 +267,14 @@ typename fixed_vector<T, N>::iterator fixed_vector<T, N>::emplace(const_iterator
 	at(pos.m_index) = T{std::forward<Args>(u)...};
 	return iterator(&m_storage, pos.m_index);
 }
-template <typename T, std::size_t N>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::erase(const_iterator pos) noexcept {
+template <typename T, std::size_t Capacity>
+auto fixed_vector<T, Capacity>::erase(const_iterator pos) noexcept -> iterator {
 	for (size_type idx = pos.m_index; idx < m_size - 1; ++idx) { at(idx) = std::move(at(idx + 1)); }
 	pop_back();
 	return iterator(&m_storage, pos.m_index);
 }
-template <typename T, std::size_t N>
-typename fixed_vector<T, N>::iterator fixed_vector<T, N>::erase(const_iterator first, const_iterator last) noexcept {
+template <typename T, std::size_t Capacity>
+auto fixed_vector<T, Capacity>::erase(const_iterator first, const_iterator last) noexcept -> iterator {
 	auto const first_idx = first.m_index;
 	if (last.m_index - first_idx == 0) { return iterator(&m_storage, last.m_index); }
 	// shift range to end by moving end to middle
@@ -283,16 +283,16 @@ typename fixed_vector<T, N>::iterator fixed_vector<T, N>::erase(const_iterator f
 	while (m_size > first.m_index) { pop_back(); }
 	return iterator(&m_storage, first_idx);
 }
-template <typename T, std::size_t N>
+template <typename T, std::size_t Capacity>
 template <typename... Args>
-T& fixed_vector<T, N>::emplace_back(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
+T& fixed_vector<T, Capacity>::emplace_back(Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
 	assert(has_space());
 	T* t = new (&m_storage[m_size]) T(std::forward<Args>(args)...);
 	++m_size;
 	return *t;
 }
-template <typename T, std::size_t N>
-void fixed_vector<T, N>::pop_back() noexcept {
+template <typename T, std::size_t Capacity>
+void fixed_vector<T, Capacity>::pop_back() noexcept {
 	assert(!empty());
 	if constexpr (!std::is_trivial_v<T>) {
 		T* t = &back();
@@ -300,15 +300,15 @@ void fixed_vector<T, N>::pop_back() noexcept {
 	}
 	--m_size;
 }
-template <typename T, std::size_t N>
-void fixed_vector<T, N>::resize(size_type count, T const& t) noexcept {
+template <typename T, std::size_t Capacity>
+void fixed_vector<T, Capacity>::resize(size_type count, T const& t) noexcept {
 	while (m_size > count) { pop_back(); }
 	while (count > m_size) { push_back(t); }
 }
-template <typename T, std::size_t N>
-bool fixed_vector<T, N>::operator==(fixed_vector<T, N> const& rhs) const noexcept {
+template <typename T, std::size_t Capacity>
+bool fixed_vector<T, Capacity>::operator==(fixed_vector<T, Capacity> const& rhs) const noexcept {
 	if (size() != rhs.size()) { return false; }
-	for (typename fixed_vector<T, N>::size_type i = 0; i < size(); ++i) {
+	for (typename fixed_vector<T, Capacity>::size_type i = 0; i < size(); ++i) {
 		if ((*this)[i] != rhs[i]) { return false; }
 	}
 	return true;

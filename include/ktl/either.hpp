@@ -2,11 +2,11 @@
 // Requirements: C++20
 
 #pragma once
+#include "koverloaded.hpp"
 #include <cassert>
 #include <new>
 #include <type_traits>
 #include <utility>
-#include "koverloaded.hpp"
 
 namespace ktl {
 ///

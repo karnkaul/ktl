@@ -82,6 +82,10 @@ Union of expected and unexpected types; uses `either.hpp`.
 
 Fixed-size type erased storage.
 
+#### `fixed_sstream.hpp`
+
+Fixed-size streambuf and stringstream implementations.
+
 #### `fixed_vector.hpp`
 
 Fixed-size vector-like container using bytearray as storage.

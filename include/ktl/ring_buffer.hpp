@@ -2,11 +2,11 @@
 // Requirements: C++20
 
 #pragma once
+#include "ring_counter.hpp"
 #include <cassert>
 #include <iterator>
 #include <span>
 #include <vector>
-#include "ring_counter.hpp"
 
 namespace ktl {
 template <typename T>

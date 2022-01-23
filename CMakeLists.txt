@@ -3,11 +3,12 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.0.2)
+set(${project_name}_version 1.0.3)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
-set(is_root_project OFF)	# indicate if this is the top-level project
+set(is_root_project OFF) # indicate if this is the top-level project
+
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(is_root_project ON)
   message(STATUS "${PROJECT_NAME} is top level")
@@ -37,7 +38,7 @@ set_property(TARGET ${project_name} PROPERTY INTERFACE_${project_name}_MAJOR_VER
 set_property(TARGET ${project_name} APPEND PROPERTY COMPATIBLE_INTERFACE_STRING ${project_name}_MAJOR_VERSION)
 
 target_compile_features(${project_name} INTERFACE cxx_std_20)
-target_include_directories(${project_name} SYSTEM INTERFACE
+target_include_directories(${project_name} INTERFACE
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
   "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
@@ -81,8 +82,9 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
 endif()
 
 # version
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}_version.hpp.in")
-  message(STATUS "Configuring ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/${PROJECT_NAME}_version.hpp")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}_version.hpp.in")
+  set(ktl_version ${PROJECT_VERSION})
+  message(STATUS "Configuring ${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/${PROJECT_NAME}_version.hpp")
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}_version.hpp.in" "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/${PROJECT_NAME}_version.hpp")
   source_group(TREE "${CMAKE_CURRENT_BINARY_DIR}" FILES "${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/${PROJECT_NAME}_version.hpp")
 endif()

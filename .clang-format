@@ -18,6 +18,9 @@ AllowShortIfStatementsOnASingleLine: Always
 AllowShortLoopsOnASingleLine: true
 IndentRequires: true
 IncludeCategories:
+    # Headers in "" with .hpp extension.
+    - Regex: '"([A-Za-z0-9\/-_])+\.hpp"'
+      Priority: 5
     # Headers in <> with .h extension.
     - Regex: '<([A-Za-z0-9\/-_])+\.h>'
       Priority: 10
