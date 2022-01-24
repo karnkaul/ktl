@@ -2,14 +2,14 @@
 // Requirements: C++20
 
 #pragma once
-#include "str_format.hpp"
+#include "str_formatter.hpp"
+#include <iostream>
 
 namespace ktl {
 ///
 /// \brief Wrapper for stack allocated char buffer (null terminated)
 ///
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 class stack_string;
 
 namespace literals {
@@ -26,8 +26,9 @@ struct streambuf_view : std::streambuf {
 };
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 class stack_string {
+	static_assert(Capacity < std::string_view::npos);
+
   public:
 	inline static constexpr std::size_t npos = std::string::npos;
 	inline static constexpr std::size_t capacity_v = Capacity;
@@ -45,7 +46,7 @@ class stack_string {
 	constexpr stack_string& operator+=(stack_string<N> const& rhs) noexcept;
 
 	constexpr std::size_t capacity() const noexcept { return capacity_v; }
-	constexpr std::size_t size() const noexcept { return m_extent; }
+	constexpr std::size_t size() const noexcept { return get().size(); }
 	constexpr std::size_t vacant() const noexcept { return capacity() - size(); }
 	constexpr char const* data() const noexcept { return m_str; }
 	constexpr char* c_str() noexcept { return m_str; }
@@ -57,32 +58,28 @@ class stack_string {
 	constexpr void write(std::string_view str) noexcept;
 	constexpr void term(std::size_t end) noexcept;
 
-	char m_str[Capacity] = {};
-	std::size_t m_extent{};
+	char m_str[Capacity + 1U] = {};
 };
 
 template <std::size_t Capacity>
 constexpr stack_string<Capacity> operator+(stack_string<Capacity> const& lhs, stack_string<Capacity> const& rhs) noexcept;
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>::stack_string(char const (&arr)[N]) noexcept {
 	write(arr);
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 template <ostreamable Arg, ostreamable... Args>
 stack_string<Capacity>::stack_string(std::string_view fmt, Arg const& arg, Args const&... args) noexcept {
 	streambuf_view buf(m_str);
 	std::iostream stream(&buf);
-	detail::format_str<str_formatter>(stream, fmt, arg, args...);
+	string_formatter<>{}(stream, fmt, arg, args...);
 	term(len(m_str));
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 template <std::size_t N>
 constexpr stack_string<Capacity>& stack_string<Capacity>::operator+=(stack_string<N> const& rhs) noexcept {
 	write(rhs);
@@ -90,7 +87,6 @@ constexpr stack_string<Capacity>& stack_string<Capacity>::operator+=(stack_strin
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 constexpr std::size_t stack_string<Capacity>::len(char const* str) noexcept {
 	std::size_t ret{};
 	for (; str && *str; ++str) { ++ret; }
@@ -98,23 +94,20 @@ constexpr std::size_t stack_string<Capacity>::len(char const* str) noexcept {
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 constexpr void stack_string<Capacity>::write(std::string_view str) noexcept {
 	std::size_t i = 0U;
-	for (; i < str.size() && m_extent + i + 1U < Capacity; ++i) { m_str[m_extent + i] = str[i]; }
-	term(m_extent + i);
+	std::size_t const extent = size();
+	for (; i < str.size() && extent + i < Capacity; ++i) { m_str[extent + i] = str[i]; }
+	term(extent + i);
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 constexpr void stack_string<Capacity>::term(std::size_t end) noexcept {
-	assert(end < Capacity);
-	m_extent = end;
-	m_str[m_extent] = '\0';
+	assert(end < Capacity + 1U);
+	m_str[end] = '\0';
 }
 
 template <std::size_t Capacity>
-	requires(Capacity > 0)
 constexpr stack_string<Capacity> operator+(stack_string<Capacity> const& lhs, stack_string<Capacity> const& rhs) noexcept {
 	auto ret = lhs;
 	return ret += rhs;

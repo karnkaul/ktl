@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.0.3)
+set(${project_name}_version 1.0.4)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -75,6 +75,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/ring_counter.hpp
     include/ktl/stack_string.hpp
     include/ktl/str_format.hpp
+    include/ktl/str_formatter.hpp
     include/ktl/tagged_store.hpp
   )
   get_target_property(sources ${project_name} SOURCES)

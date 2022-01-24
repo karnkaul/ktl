@@ -82,10 +82,6 @@ Union of expected and unexpected types; uses `either.hpp`.
 
 Fixed-size type erased storage.
 
-#### `fixed_sstream.hpp`
-
-Fixed-size streambuf and stringstream implementations.
-
 #### `fixed_vector.hpp`
 
 Fixed-size vector-like container using bytearray as storage.
@@ -117,6 +113,10 @@ Wrapper for stack allocated char array / C string.
 #### `str_format.hpp`
 
 Format a `std::string` using provided interpolation token (`{}` by default).
+
+#### `str_formatter.hpp`
+
+Customization points for str_format interface.
 
 ### Contributing
 
