@@ -2,14 +2,14 @@
 // Requirements: C++20
 
 #pragma once
+#include "kfunction.hpp"
+#include <cassert>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
-#include "kfunction.hpp"
-#include "kthread.hpp"
 
 namespace ktl {
 namespace detail {
@@ -35,6 +35,11 @@ template <typename T>
 class promise_base_t {
   public:
 	promise_base_t() : m_block(std::make_shared<detail::future_block_t<T>>()) {}
+
+	promise_base_t(promise_base_t&&) = default;
+	promise_base_t& operator=(promise_base_t&&) = default;
+	promise_base_t(promise_base_t const&) = delete;
+	promise_base_t& operator=(promise_base_t const&) = delete;
 
 	///
 	/// \brief Obtain an associated future (multiple instances are supported)
@@ -154,7 +159,11 @@ class kpackaged_task<R(Args...)> {
 	///
 	/// \brief Discard and reset shared and invocation state
 	///
-	void reset();
+	void reset() noexcept;
+	///
+	/// \brief Extract underlying callable and reset packaged task
+	///
+	kfunction<R(Args...)> extract() noexcept;
 
 	///
 	/// \brief Invoke stored callable (assumed valid) and signal associated future(s)
@@ -262,7 +271,14 @@ kpackaged_task<R(Args...)>::kpackaged_task(F f)
 	  }) {}
 
 template <typename R, typename... Args>
-void kpackaged_task<R(Args...)>::reset() {
+kfunction<R(Args...)> kpackaged_task<R(Args...)>::extract() noexcept {
+	auto ret = std::move(m_func);
+	reset();
+	return ret;
+}
+
+template <typename R, typename... Args>
+void kpackaged_task<R(Args...)>::reset() noexcept {
 	m_func = {};
 	m_promise = {};
 }
