@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.0.4)
+set(${project_name}_version 1.0.5)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})

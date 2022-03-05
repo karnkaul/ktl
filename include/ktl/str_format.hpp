@@ -1,6 +1,7 @@
 // KTL header-only library
 // Requirements: C++20
 
+#pragma once
 #include "str_formatter.hpp"
 #include <sstream>
 

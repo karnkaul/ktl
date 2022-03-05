@@ -1,6 +1,7 @@
 // KTL header-only library
 // Requirements: C++20
 
+#pragma once
 #include <cassert>
 #include <concepts>
 #include <cstring>
@@ -117,9 +118,12 @@ constexpr auto detail::str_format_scanner<Begin, End>::next() noexcept -> str_fo
 template <typename Interpolator, char Begin, char End>
 template <ostreamable... Args>
 std::ostream& string_formatter<Interpolator, Begin, End>::operator()(std::ostream& out, std::string_view fmt, Args const&... args) {
-	if constexpr (sizeof...(Args) == 0) { return out << fmt; }
-	m_scanner.text = fmt;
-	return format(out, args...);
+	if constexpr (sizeof...(Args) == 0) {
+		return out << fmt;
+	} else {
+		m_scanner.text = fmt;
+		return format(out, args...);
+	}
 }
 
 template <typename Interpolator, char Begin, char End>
