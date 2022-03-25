@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.0.5)
+set(${project_name}_version 1.1)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -62,12 +62,14 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/debug_trap.hpp
     include/ktl/delegate.hpp
     include/ktl/either.hpp
-    include/ktl/erased_semantics.hpp
     include/ktl/expected.hpp
+    include/ktl/enumerate.hpp
     include/ktl/fixed_any.hpp
     include/ktl/fixed_pimpl.hpp
     include/ktl/fixed_vector.hpp
+    include/ktl/hash_table.hpp
     include/ktl/koverloaded.hpp
+    include/ktl/kunique_ptr.hpp
     include/ktl/kvariant.hpp
     include/ktl/n_tree.hpp
     include/ktl/not_null.hpp
@@ -77,6 +79,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/str_format.hpp
     include/ktl/str_formatter.hpp
     include/ktl/tagged_store.hpp
+    include/ktl/unique_val.hpp
   )
   get_target_property(sources ${project_name} SOURCES)
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${sources})

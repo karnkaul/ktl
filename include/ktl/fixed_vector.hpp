@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <new>
+#include <span>
 #include <type_traits>
 
 namespace ktl {
@@ -94,6 +95,9 @@ class fixed_vector {
 	void resize(size_type count, T const& t = {}) noexcept;
 
 	bool operator==(fixed_vector const& rhs) const noexcept;
+
+	operator std::span<T>() noexcept { return {data(), size()}; }
+	operator std::span<T const>() const noexcept { return {data(), size()}; }
 
   private:
 	using storage_t = std::array<std::aligned_storage_t<sizeof(T), alignof(T)>, Capacity>;

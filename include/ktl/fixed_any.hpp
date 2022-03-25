@@ -2,49 +2,60 @@
 // Requirements: C++20
 
 #pragma once
-#include "erased_semantics.hpp"
 #include <cassert>
+#include <concepts>
 #include <cstddef>
 #include <stdexcept>
 
 namespace ktl {
+namespace detail {
+struct fixed_any_vtable {
+	void (*construct)(void* ptr);
+	void (*move)(void* src, void* dst);
+	void (*copy)(void const* src, void* dst);
+	void (*destroy)(void const* ptr);
+};
+
+template <typename T>
+constexpr fixed_any_vtable fixed_any_vtable_v = {
+	[](void* ptr) { new (ptr) T{}; },
+	[](void* src, void* dst) { *static_cast<T*>(dst) = std::move(*static_cast<T*>(src)); },
+	[](void const* src, void* dst) { *static_cast<T*>(dst) = *static_cast<T const*>(src); },
+	[](void const* ptr) { static_cast<T const*>(ptr)->~T(); },
+};
+} // namespace detail
+
 ///
 /// \brief Fixed-size type erased storage
 ///
 template <std::size_t Capacity = sizeof(void*)>
 class fixed_any final {
 	template <typename T>
-	static constexpr bool is_different_v = !std::is_same_v<std::decay_t<T>, fixed_any<Capacity>>;
+	static constexpr bool is_different_v = !std::is_same_v<T, fixed_any<Capacity>>;
 	template <typename T>
 	static constexpr bool is_copiable_v = std::is_copy_constructible_v<std::decay_t<T>>;
 
   public:
-#if defined(KTL_FIXED_ANY_THROW)
-	static constexpr bool throw_exception = true;
-#else
-	static constexpr bool throw_exception = false;
-#endif
-
 	constexpr fixed_any() noexcept = default;
 
 	constexpr fixed_any(fixed_any&& rhs) noexcept;
 	constexpr fixed_any(fixed_any const& rhs);
 	constexpr fixed_any& operator=(fixed_any&& rhs) noexcept;
 	constexpr fixed_any& operator=(fixed_any const& rhs);
-	constexpr ~fixed_any();
+	constexpr ~fixed_any() noexcept;
 
 	///
 	/// \brief Construct with object of type T
 	///
 	template <typename T>
-		requires is_different_v<T> && is_copiable_v<T>
-	constexpr fixed_any(T&& t) noexcept(std::is_nothrow_move_constructible_v<T>) { construct(std::forward<T>(t)); }
+		requires(is_different_v<T>&& is_copiable_v<T>)
+	constexpr fixed_any(T t) noexcept(std::is_nothrow_move_constructible_v<T>) { construct(std::move(t)); }
 	///
 	/// \brief Assign to object of type T
 	///
 	template <typename T>
-		requires is_different_v<T> && is_copiable_v<T>
-	constexpr fixed_any& operator=(T&& t) { return (construct(std::forward<T>(t)), *this); }
+		requires(is_different_v<T>&& is_copiable_v<T>)
+	constexpr fixed_any& operator=(T t) { return (construct(std::move(t)), *this); }
 	///
 	/// \brief Check if held type (if any) matches T
 	///
@@ -80,42 +91,41 @@ class fixed_any final {
 
   private:
 	template <typename T>
-	constexpr void construct(T&& t);
+	constexpr void construct(T t);
 
-	template <typename T>
-		requires(!std::is_lvalue_reference_v<T>)
-	constexpr void emplace(T&& t);
-
-	template <typename T>
-	constexpr void emplace(T const& t);
-
-	template <typename T>
-	static erased_semantics const& erased() noexcept;
+	constexpr void assign(detail::fixed_any_vtable const* vtable) {
+		if (m_vtable != vtable) {
+			clear();
+			m_vtable = vtable;
+			if (m_vtable) { m_vtable->construct(&m_bytes); }
+		}
+	}
 
 	std::aligned_storage_t<Capacity, alignof(std::max_align_t)> m_bytes;
-	erased_semantics const* m_erased = nullptr;
+	detail::fixed_any_vtable const* m_vtable{};
 };
 
 template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::fixed_any(fixed_any&& rhs) noexcept : m_erased(rhs.m_erased) {
-	if (m_erased) { m_erased->move_construct(&rhs.m_bytes, &m_bytes); }
+constexpr fixed_any<Capacity>::fixed_any(fixed_any&& rhs) noexcept : m_vtable(rhs.m_vtable) {
+	if (m_vtable) {
+		m_vtable->construct(&m_bytes);
+		m_vtable->move(&rhs.m_bytes, &m_bytes);
+	}
 }
 
 template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::fixed_any(fixed_any const& rhs) : m_erased(rhs.m_erased) {
-	if (m_erased) { m_erased->copy_construct(&rhs.m_bytes, &m_bytes); }
+constexpr fixed_any<Capacity>::fixed_any(fixed_any const& rhs) : m_vtable(rhs.m_vtable) {
+	if (m_vtable) {
+		m_vtable->construct(&m_bytes);
+		m_vtable->copy(&rhs.m_bytes, &m_bytes);
+	}
 }
 
 template <std::size_t Capacity>
 constexpr fixed_any<Capacity>& fixed_any<Capacity>::operator=(fixed_any&& rhs) noexcept {
 	if (&rhs != this) {
-		if (m_erased == rhs.m_erased) {
-			if (m_erased) { m_erased->move_assign(&rhs.m_bytes, &m_bytes); }
-		} else {
-			clear();
-			m_erased = rhs.m_erased;
-			if (m_erased) { m_erased->move_construct(&rhs.m_bytes, &m_bytes); }
-		}
+		assign(rhs.m_vtable);
+		if (m_vtable) { m_vtable->move(&rhs.m_bytes, &m_bytes); }
 	}
 	return *this;
 }
@@ -123,55 +133,40 @@ constexpr fixed_any<Capacity>& fixed_any<Capacity>::operator=(fixed_any&& rhs) n
 template <std::size_t Capacity>
 constexpr fixed_any<Capacity>& fixed_any<Capacity>::operator=(fixed_any const& rhs) {
 	if (&rhs != this) {
-		if (m_erased == rhs.m_erased) {
-			if (m_erased) { m_erased->copy_assign(&rhs.m_bytes, &m_bytes); }
-		} else {
-			clear();
-			m_erased = rhs.m_erased;
-			if (m_erased) { m_erased->copy_construct(&rhs.m_bytes, &m_bytes); }
-		}
+		assign(rhs.m_vtable);
+		if (m_vtable) { m_vtable->copy(&rhs.m_bytes, &m_bytes); }
 	}
 	return *this;
 }
 
 template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::~fixed_any() {
+constexpr fixed_any<Capacity>::~fixed_any() noexcept {
 	clear();
 }
 
 template <std::size_t Capacity>
 template <typename T>
 constexpr bool fixed_any<Capacity>::contains() const noexcept {
-	return &erased<T>() == m_erased;
+	return &detail::fixed_any_vtable_v<T> == m_vtable;
 }
 
 template <std::size_t Capacity>
 constexpr bool fixed_any<Capacity>::empty() const noexcept {
-	return m_erased == nullptr;
+	return m_vtable == nullptr;
 }
 
 template <std::size_t Capacity>
 template <typename T>
 constexpr T const& fixed_any<Capacity>::get() const {
 	if (contains<T>()) { return *std::launder(reinterpret_cast<T const*>(&m_bytes)); }
-	if constexpr (throw_exception) {
-		throw std::runtime_error("fixed_any_t: Type mismatch!");
-	} else {
-		assert(false && "fixed_any: Type mismatch");
-		std::terminate();
-	}
+	throw std::runtime_error("fixed_any_t: Type mismatch!");
 }
 
 template <std::size_t Capacity>
 template <typename T>
 constexpr T& fixed_any<Capacity>::get() {
 	if (contains<T>()) { return *std::launder(reinterpret_cast<T*>(&m_bytes)); }
-	if constexpr (throw_exception) {
-		throw std::runtime_error("fixed_any_t: Type mismatch!");
-	} else {
-		assert(false && "fixed_any: Type mismatch");
-		std::terminate();
-	}
+	throw std::runtime_error("fixed_any_t: Type mismatch!");
 }
 
 template <std::size_t Capacity>
@@ -183,9 +178,9 @@ constexpr T fixed_any<Capacity>::value_or(T const& fallback) const {
 
 template <std::size_t Capacity>
 constexpr bool fixed_any<Capacity>::clear() noexcept {
-	if (m_erased) {
-		m_erased->destroy(&m_bytes);
-		m_erased = nullptr;
+	if (m_vtable) {
+		m_vtable->destroy(&m_bytes);
+		m_vtable = {};
 		return true;
 	}
 	return false;
@@ -193,48 +188,15 @@ constexpr bool fixed_any<Capacity>::clear() noexcept {
 
 template <std::size_t Capacity>
 template <typename T>
-constexpr void fixed_any<Capacity>::construct(T&& t) {
+constexpr void fixed_any<Capacity>::construct(T t) {
 	if constexpr (std::is_same_v<T, std::nullptr_t>) {
 		clear();
 	} else {
 		static_assert(is_different_v<T>, "fixed_any_t: Recursive storage is forbidden");
 		static_assert(sizeof(std::decay_t<T>) <= Capacity, "fixed_any_t: T is too large (compared to N)");
 		static_assert(alignof(std::decay_t<T>) <= alignof(std::max_align_t), "fixed_any_t: alignof(T) is too large");
-		emplace(std::forward<T>(t));
+		assign(&detail::fixed_any_vtable_v<T>);
+		m_vtable->move(&t, &m_bytes);
 	}
-}
-
-template <std::size_t Capacity>
-template <typename T>
-	requires(!std::is_lvalue_reference_v<T>)
-constexpr void fixed_any<Capacity>::emplace(T&& t) {
-	auto const& e = erased<std::decay_t<T>>();
-	if (m_erased && m_erased == &e) {
-		m_erased->move_assign(std::addressof(t), &m_bytes);
-	} else {
-		clear();
-		m_erased = &e;
-		m_erased->move_construct(std::addressof(t), &m_bytes);
-	}
-}
-
-template <std::size_t Capacity>
-template <typename T>
-constexpr void fixed_any<Capacity>::emplace(T const& t) {
-	auto const& e = erased<std::decay_t<T>>();
-	if (m_erased && m_erased == &e) {
-		m_erased->copy_assign(std::addressof(t), &m_bytes);
-	} else {
-		clear();
-		m_erased = &e;
-		m_erased->copy_construct(std::addressof(t), &m_bytes);
-	}
-}
-
-template <std::size_t Capacity>
-template <typename T>
-erased_semantics const& fixed_any<Capacity>::erased() noexcept {
-	static constexpr erased_semantics const s_erased{erased_semantics::tag_t<T>()};
-	return s_erased;
 }
 } // namespace ktl

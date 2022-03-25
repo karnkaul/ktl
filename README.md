@@ -74,6 +74,10 @@ Tagged observer store with RAII signals.
 
 RAII union of two types.
 
+#### `enumerate.hpp`
+
+Wrapper for indexed iteration over ranges represented by pairs of iterators.
+
 #### `expected.hpp`
 
 Union of expected and unexpected types; uses `either.hpp`.
@@ -85,6 +89,14 @@ Fixed-size type erased storage.
 #### `fixed_vector.hpp`
 
 Fixed-size vector-like container using bytearray as storage.
+
+#### `hash_table.hpp`
+
+Lightweight hash-table with chaining and reduced iterator stability.
+
+#### `kunique_ptr.hpp`
+
+Lightweight unique pointer to heap-allocated Type*
 
 #### `monotonic_map.hpp`
 
