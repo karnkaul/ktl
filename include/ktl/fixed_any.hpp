@@ -2,201 +2,148 @@
 // Requirements: C++20
 
 #pragma once
-#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
 
 namespace ktl {
-namespace detail {
 struct fixed_any_vtable {
-	void (*construct)(void* ptr);
-	void (*move)(void* src, void* dst);
-	void (*copy)(void const* src, void* dst);
-	void (*destroy)(void const* ptr);
+	void (*const move)(void* src, void* dst);
+	void (*const copy)(void const* src, void* dst);
+	void (*const destroy)(void const* ptr);
 };
 
 template <typename T>
-constexpr fixed_any_vtable fixed_any_vtable_v = {
-	[](void* ptr) { new (ptr) T{}; },
-	[](void* src, void* dst) { *static_cast<T*>(dst) = std::move(*static_cast<T*>(src)); },
-	[](void const* src, void* dst) { *static_cast<T*>(dst) = *static_cast<T const*>(src); },
-	[](void const* ptr) { static_cast<T const*>(ptr)->~T(); },
-};
-} // namespace detail
+fixed_any_vtable const& get_fixed_any_vtable() {
+	static auto const ret = fixed_any_vtable{
+		[](void* src, void* dst) { new (dst) T(std::move(*static_cast<T*>(src))); },
+		[](void const* src, void* dst) { new (dst) T(*static_cast<T const*>(src)); },
+		[](void const* ptr) { static_cast<T const*>(ptr)->~T(); },
+	};
+	return ret;
+}
 
 ///
 /// \brief Fixed-size type erased storage
 ///
-template <std::size_t Capacity = sizeof(void*)>
+template <std::size_t Capacity = sizeof(void*), std::size_t Align = alignof(std::max_align_t)>
 class fixed_any final {
 	template <typename T>
 	static constexpr bool is_different_v = !std::is_same_v<T, fixed_any<Capacity>>;
-	template <typename T>
-	static constexpr bool is_copiable_v = std::is_copy_constructible_v<std::decay_t<T>>;
 
   public:
-	constexpr fixed_any() noexcept = default;
-
-	constexpr fixed_any(fixed_any&& rhs) noexcept;
-	constexpr fixed_any(fixed_any const& rhs);
-	constexpr fixed_any& operator=(fixed_any&& rhs) noexcept;
-	constexpr fixed_any& operator=(fixed_any const& rhs);
-	constexpr ~fixed_any() noexcept;
+	fixed_any() = default;
 
 	///
-	/// \brief Construct with object of type T
+	/// \brief Move construct T
 	///
 	template <typename T>
-		requires(is_different_v<T>&& is_copiable_v<T>)
-	constexpr fixed_any(T t) noexcept(std::is_nothrow_move_constructible_v<T>) { construct(std::move(t)); }
+		requires(is_different_v<T>)
+	fixed_any(T t) { emplace<T>(std::move(t)); }
+
+	fixed_any(fixed_any&& rhs) noexcept { move(std::move(rhs)); }
+	fixed_any(fixed_any const& rhs) { copy(rhs); }
+	fixed_any& operator=(fixed_any&& rhs) noexcept { return (move(std::move(rhs)), *this); }
+	fixed_any& operator=(fixed_any const& rhs) { return (copy(rhs), *this); }
+	~fixed_any() noexcept { clear(); }
+
 	///
-	/// \brief Assign to object of type T
+	/// \brief Construct T via Args...
 	///
-	template <typename T>
-		requires(is_different_v<T>&& is_copiable_v<T>)
-	constexpr fixed_any& operator=(T t) { return (construct(std::move(t)), *this); }
+	template <typename T, typename... Args>
+		requires(std::is_copy_constructible_v<T> && sizeof(T) <= Capacity && alignof(T) <= Align)
+	T& emplace(Args&&... args);
+
 	///
 	/// \brief Check if held type (if any) matches T
 	///
 	template <typename T>
-	constexpr bool contains() const noexcept;
+	bool contains() const {
+		return m_vtable == &get_fixed_any_vtable<T>();
+	}
+	///
+	/// \brief Obtain reference to T
+	/// Throws on type mismatch
+	///
+	template <typename T>
+	T const& get() const;
+	///
+	/// \brief Obtain reference to T
+	/// Throws on type mismatch
+	///
+	template <typename T>
+	T& get();
+	///
+	/// \brief Obtain reference to T if contained, else fallback
+	///
+	template <typename T>
+	T const& value_or(T const& fallback) const;
 	///
 	/// \brief Check if no type is held
 	///
-	constexpr bool empty() const noexcept;
-	///
-	/// \brief Obtain reference to T
-	/// Throws / returns static reference on type mismatch
-	///
-	template <typename T>
-	constexpr T const& get() const;
-	///
-	/// \brief Obtain reference to T
-	/// Throws / returns static reference on type mismatch
-	///
-	template <typename T>
-	constexpr T& get();
-	///
-	/// \brief Obtain a copy of T if contained, else fallback
-	/// Throws / returns static reference on type mismatch
-	///
-	template <typename T>
-	constexpr T value_or(T const& fallback) const;
-
+	bool empty() const { return m_vtable == nullptr; }
 	///
 	/// \brief Destroy held type (if any)
 	///
-	constexpr bool clear() noexcept;
+	bool clear();
+
+	fixed_any_vtable const* vtable() const { return m_vtable; }
+	std::byte const* data() const { return m_data; }
 
   private:
-	template <typename T>
-	constexpr void construct(T t);
-
-	constexpr void assign(detail::fixed_any_vtable const* vtable) {
-		if (m_vtable != vtable) {
-			clear();
-			m_vtable = vtable;
-			if (m_vtable) { m_vtable->construct(&m_bytes); }
-		}
+	void move(fixed_any&& rhs) {
+		clear();
+		m_vtable = rhs.m_vtable;
+		if (m_vtable) { m_vtable->move(rhs.m_data, m_data); }
 	}
 
-	std::aligned_storage_t<Capacity, alignof(std::max_align_t)> m_bytes;
-	detail::fixed_any_vtable const* m_vtable{};
+	void copy(fixed_any const& rhs) {
+		clear();
+		m_vtable = rhs.m_vtable;
+		if (m_vtable) { m_vtable->copy(rhs.m_data, m_data); }
+	}
+
+	alignas(Align) std::byte m_data[Capacity]{};
+	fixed_any_vtable const* m_vtable{};
 };
 
-template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::fixed_any(fixed_any&& rhs) noexcept : m_vtable(rhs.m_vtable) {
-	if (m_vtable) {
-		m_vtable->construct(&m_bytes);
-		m_vtable->move(&rhs.m_bytes, &m_bytes);
-	}
-}
-
-template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::fixed_any(fixed_any const& rhs) : m_vtable(rhs.m_vtable) {
-	if (m_vtable) {
-		m_vtable->construct(&m_bytes);
-		m_vtable->copy(&rhs.m_bytes, &m_bytes);
-	}
-}
-
-template <std::size_t Capacity>
-constexpr fixed_any<Capacity>& fixed_any<Capacity>::operator=(fixed_any&& rhs) noexcept {
-	if (&rhs != this) {
-		assign(rhs.m_vtable);
-		if (m_vtable) { m_vtable->move(&rhs.m_bytes, &m_bytes); }
-	}
-	return *this;
-}
-
-template <std::size_t Capacity>
-constexpr fixed_any<Capacity>& fixed_any<Capacity>::operator=(fixed_any const& rhs) {
-	if (&rhs != this) {
-		assign(rhs.m_vtable);
-		if (m_vtable) { m_vtable->copy(&rhs.m_bytes, &m_bytes); }
-	}
-	return *this;
-}
-
-template <std::size_t Capacity>
-constexpr fixed_any<Capacity>::~fixed_any() noexcept {
+template <std::size_t Capacity, std::size_t Align>
+template <typename T, typename... Args>
+	requires(std::is_copy_constructible_v<T> && sizeof(T) <= Capacity && alignof(T) <= Align)
+T& fixed_any<Capacity, Align>::emplace(Args&&... args) {
 	clear();
+	auto ret = new (m_data) T(std::forward<Args>(args)...);
+	m_vtable = &get_fixed_any_vtable<T>();
+	return *ret;
 }
 
-template <std::size_t Capacity>
+template <std::size_t Capacity, std::size_t Align>
 template <typename T>
-constexpr bool fixed_any<Capacity>::contains() const noexcept {
-	return &detail::fixed_any_vtable_v<T> == m_vtable;
-}
-
-template <std::size_t Capacity>
-constexpr bool fixed_any<Capacity>::empty() const noexcept {
-	return m_vtable == nullptr;
-}
-
-template <std::size_t Capacity>
-template <typename T>
-constexpr T const& fixed_any<Capacity>::get() const {
-	if (contains<T>()) { return *std::launder(reinterpret_cast<T const*>(&m_bytes)); }
+T const& fixed_any<Capacity, Align>::get() const {
+	if (contains<T>()) { return *std::launder(reinterpret_cast<T const*>(m_data)); }
 	throw std::runtime_error("fixed_any_t: Type mismatch!");
 }
 
-template <std::size_t Capacity>
+template <std::size_t Capacity, std::size_t Align>
 template <typename T>
-constexpr T& fixed_any<Capacity>::get() {
-	if (contains<T>()) { return *std::launder(reinterpret_cast<T*>(&m_bytes)); }
-	throw std::runtime_error("fixed_any_t: Type mismatch!");
+T& fixed_any<Capacity, Align>::get() {
+	return const_cast<T&>(static_cast<fixed_any const&>(*this).get<T>());
 }
 
-template <std::size_t Capacity>
+template <std::size_t Capacity, std::size_t Align>
 template <typename T>
-constexpr T fixed_any<Capacity>::value_or(T const& fallback) const {
-	if (contains<T>()) { return *std::launder(reinterpret_cast<T const*>(&m_bytes)); }
+T const& fixed_any<Capacity, Align>::value_or(T const& fallback) const {
+	if (contains<T>()) { return *std::launder(reinterpret_cast<T const*>(m_data)); }
 	return fallback;
 }
 
-template <std::size_t Capacity>
-constexpr bool fixed_any<Capacity>::clear() noexcept {
+template <std::size_t Capacity, std::size_t Align>
+bool fixed_any<Capacity, Align>::clear() {
 	if (m_vtable) {
-		m_vtable->destroy(&m_bytes);
+		m_vtable->destroy(m_data);
 		m_vtable = {};
 		return true;
 	}
 	return false;
-}
-
-template <std::size_t Capacity>
-template <typename T>
-constexpr void fixed_any<Capacity>::construct(T t) {
-	if constexpr (std::is_same_v<T, std::nullptr_t>) {
-		clear();
-	} else {
-		static_assert(is_different_v<T>, "fixed_any_t: Recursive storage is forbidden");
-		static_assert(sizeof(std::decay_t<T>) <= Capacity, "fixed_any_t: T is too large (compared to N)");
-		static_assert(alignof(std::decay_t<T>) <= alignof(std::max_align_t), "fixed_any_t: alignof(T) is too large");
-		assign(&detail::fixed_any_vtable_v<T>);
-		m_vtable->move(&t, &m_bytes);
-	}
 }
 } // namespace ktl

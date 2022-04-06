@@ -35,6 +35,7 @@ class kvariant {
 	static constexpr bool visitable_v = (std::is_invocable_v<V, Types> && ...);
 
   public:
+	using vtable_t = fixed_any_vtable;
 	static constexpr std::size_t size_v = detail::largest_sizeof_v<Types...>;
 
 	// clang-format off
@@ -80,20 +81,26 @@ class kvariant {
 		requires(detail::is_type_in_v<T, Types...>)
 	T && get() && noexcept;
 
+	vtable_t const* vtable() const { return m_storage.vtable(); }
+
 	///
 	/// \brief Visitor for Types...
 	///
 	// clang-format off
 	template <typename Visitor>
 		requires(visitable_v<Visitor>)
-	visit_ret_t<Visitor> visit(Visitor&& visitor) const noexcept { return visit<Types...>(m_storage, std::forward<Visitor>(visitor)); }
-	// clang-format on
+	visit_ret_t<Visitor> visit(Visitor&& visitor) const { return visit<Types...>(m_storage, std::forward<Visitor>(visitor)); }
+
+	template <typename Visitor>
+		requires(visitable_v<Visitor>)
+	visit_ret_t<Visitor> visit(Visitor&& visitor) { return visit<Types...>(m_storage, std::forward<Visitor>(visitor)); }
 
   private:
 	template <typename T, typename... Ts, typename Any, typename Visitor>
 	static constexpr visit_ret_t<Visitor> visit(Any&& any, Visitor&& visitor) noexcept;
 
 	fixed_any<size_v> m_storage;
+	// clang-format on
 };
 
 // impl
