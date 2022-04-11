@@ -2,7 +2,6 @@
 // Requirements: C++20
 
 #pragma once
-#include "kunique_ptr.hpp"
 #include "unique_val.hpp"
 #include <cassert>
 #include <functional>
@@ -11,7 +10,7 @@
 
 namespace ktl {
 ///
-/// \brief Lightweight hash-table with chaining and reduced iterator stability
+/// \brief Lightweight hash-table with open addressing and reduced iterator stability
 ///
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 class hash_table {
@@ -26,7 +25,12 @@ class hash_table {
 	using iterator = iter_t<false>;
 	using const_iterator = iter_t<true>;
 
-	hash_table(std::size_t count = 16) { rehash(count); }
+	static constexpr std::size_t bucket_count_v = 16U;
+
+	hash_table(std::size_t bucket_count = bucket_count_v) { rehash(bucket_count); }
+	hash_table(std::initializer_list<value_type> init, std::size_t bucket_count = bucket_count_v);
+	template <typename InputIt>
+	hash_table(InputIt first, InputIt last, std::size_t bucket_count = bucket_count_v);
 
 	template <typename... Args>
 	std::pair<iterator, bool> emplace(Key key, Args&&... args);
@@ -41,30 +45,28 @@ class hash_table {
 	mapped_type& operator[](Key const& key);
 
 	std::size_t size() const { return m_size; }
+	bool empty() const { return size() == 0U; }
 	void clear() noexcept;
 
 	iterator begin() noexcept;
-	iterator end() { return {m_table, m_table.size(), {}}; }
+	iterator end() { return {&m_table, m_table.size()}; }
 	const_iterator begin() const noexcept;
-	const_iterator end() const noexcept { return {m_table, m_table.size(), {}}; }
+	const_iterator end() const noexcept { return {&m_table, m_table.size()}; }
 
 	void rehash(std::size_t count);
 	std::size_t bucket_count() const { return m_table.size(); }
-	std::size_t bucket(Key const& key) const { return Hash{}(key) % m_table.size(); }
-	float load_factor() const { return static_cast<float>(size()) / static_cast<float>(bucket_count()); }
+	float load_factor() const;
 
   private:
 	template <typename Table>
 	static std::size_t first_bucket_index(Table&& table);
-	template <typename NodePtr>
-	static std::pair<NodePtr, NodePtr> find_node_and_parent(Key const& key, NodePtr root, NodePtr parent = {});
 	template <typename K, typename... Args>
 	std::pair<iterator, bool> emplace_impl(K&& key, Args&&... args);
 
 	struct node_t;
 	using table_t = std::vector<node_t>;
 
-	void insert_node(node_t* node);
+	std::size_t find_node_index(Key const& key) const;
 
 	table_t m_table{};
 	unique_val<std::size_t> m_size{};
@@ -75,33 +77,11 @@ class hash_table {
 template <typename Key, typename Value, typename Hash>
 struct hash_table<Key, Value, Hash>::node_t {
 	std::optional<std::pair<Key, Value>> kvp{};
-	ktl::kunique_ptr<node_t> next{};
+	bool visited{};
 
-	node_t() = default;
-	node_t(std::pair<Key, Value> kvp) noexcept : kvp(std::move(kvp)) {}
-
-	node_t(node_t&&) = default;
-	node_t& operator=(node_t&&) = default;
-
-	node_t(node_t const& rhs) { copy_from(rhs); }
-	node_t& operator=(node_t const& rhs) {
-		if (&rhs != this) {
-			next.reset();
-			copy_from(rhs);
-		}
-		return *this;
-	}
-
-	void copy_from(node_t const& rhs) {
-		kvp = rhs.kvp;
-		auto src = rhs.next.get();
-		auto* dst = &next;
-		while (src) {
-			assert(src->kvp);
-			*dst = ktl::make_unique<node_t>(*src->kvp);
-			dst = &(*dst)->next;
-			src = src->next.get();
-		}
+	void reset(bool set_visited = {}) {
+		kvp.reset();
+		visited = set_visited;
 	}
 };
 
@@ -120,23 +100,13 @@ class hash_table<Key, Value, Hash>::iter_t {
 
 	iter_t() = default;
 
-	reference operator*() const { return {m_node->kvp->first, m_node->kvp->second}; }
+	reference operator*() const { return {(*m_table)[m_index].kvp->first, (*m_table)[m_index].kvp->second}; }
 	pointer operator->() const { return {operator*()}; }
 
 	iter_t& operator++() {
-		if (m_root == m_bend) { return *this; }
-
-		// go to next node
-		assert(m_node);
-		if (m_node->next) {
-			m_node = m_node->next.get();
-			return *this;
-		}
-
-		// go to next bucket or end
-		m_node = {};
-		do { ++m_root; } while (m_root != m_bend && !m_root->kvp);
-		if (m_root != m_bend) { m_node = &*m_root; }
+		if (!m_table || m_index >= m_table->size()) { return *this; }
+		++m_index;
+		while (m_index < m_table->size() && !(*m_table)[m_index].kvp) { ++m_index; }
 		return *this;
 	}
 
@@ -146,24 +116,31 @@ class hash_table<Key, Value, Hash>::iter_t {
 		return ret;
 	}
 
-	operator iter_t<true>() const noexcept { return {m_root, m_bend, m_node}; }
+	operator iter_t<true>() const noexcept { return {m_table, m_index}; }
 	bool operator==(iter_t const&) const = default;
 
   private:
-	using table_ref_t = std::conditional_t<Const, typename hash_table::table_t const&, typename hash_table::table_t&>;
-	using table_it_t = std::conditional_t<Const, typename hash_table::table_t::const_iterator, typename hash_table::table_t::iterator>;
-	using node_ptr_t = std::conditional_t<Const, node_t const*, node_t*>;
+	using table_t = std::conditional_t<Const, typename hash_table::table_t const, typename hash_table::table_t>;
 
-	iter_t(table_ref_t table, std::size_t bidx, node_ptr_t node) noexcept : m_root(table.begin() + bidx), m_bend(table.end()), m_node(node) {}
-	iter_t(table_it_t table, table_it_t tend, node_ptr_t node) : m_root(table), m_bend(tend), m_node(node) {}
+	iter_t(table_t* table, std::size_t index) : m_table(table), m_index(index) {}
 
-	table_it_t m_root{};
-	table_it_t m_bend{};
-	node_ptr_t m_node{};
+	table_t* m_table{};
+	std::size_t m_index{};
 
 	friend class hash_table;
 	friend class iter_t<false>;
 };
+
+template <typename Key, typename Value, typename Hash>
+hash_table<Key, Value, Hash>::hash_table(std::initializer_list<value_type> init, std::size_t bucket_count) : hash_table(bucket_count) {
+	for (auto const& value : init) { emplace_impl(value.first, value.second); }
+}
+
+template <typename Key, typename Value, typename Hash>
+template <typename InputIt>
+hash_table<Key, Value, Hash>::hash_table(InputIt first, InputIt last, std::size_t bucket_count) : hash_table(bucket_count) {
+	for (; first != last; ++first) { emplace_impl(first->first, first->second); }
+}
 
 template <typename Key, typename Value, typename Hash>
 template <typename... Args>
@@ -192,102 +169,71 @@ auto hash_table<Key, Value, Hash>::insert_or_assign(Key const& key, Value value)
 
 template <typename Key, typename Value, typename Hash>
 bool hash_table<Key, Value, Hash>::erase(Key const& key) {
-	node_t& root = m_table[bucket(key)];
-	auto const [node, parent] = find_node_and_parent(key, &root);
-	if (!node) { return false; }
-
-	if (!parent) {
-		// target is root node
-		assert(node == &root);
-		if (root.next) {
-			root = std::move(*root.next);
-		} else {
-			root.kvp.reset();
-		}
-	} else {
-		// target has parent node
-		parent->next = std::move(node->next);
+	if (auto index = find_node_index(key); index < m_table.size()) {
+		m_table[index].reset(true);
+		--m_size.value;
+		return true;
 	}
-
-	--m_size.value;
-	return true;
+	return false;
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::erase(iterator it) -> iterator {
 	if (it == end()) { return it; }
-
-	// obtain bucket index
-	assert(it.m_node && it.m_node->kvp);
-	auto bidx = static_cast<std::size_t>(it.m_root - m_table.begin());
-	assert(bidx < m_table.size());
-	node_t* node = it.m_node;
-
+	assert(it.m_table == &m_table && it.m_index < m_table.size() && m_table[it.m_index].kvp);
+	m_table[it.m_index].reset(true);
 	--m_size.value;
-	if (node->next) {
-		// replace node with child
-		*node = std::move(*node->next);
-		return {m_table, bidx, node};
-	}
-	// reset kvp, find next node to return
-	node->kvp.reset();
-	for (; bidx < m_table.size(); ++bidx) {
-		node = &m_table[bidx];
-		if (node->kvp) { break; }
-	}
-
-	if (bidx == m_table.size()) { return end(); }
-	assert(node->kvp);
-	return {m_table, bidx, node};
+	return ++it;
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::find(Key const& key) -> iterator {
-	auto const bidx = bucket(key);
-	auto const [node, _] = find_node_and_parent(key, &m_table[bidx]);
-	if (node) { return {m_table, bidx, node}; }
-	return end();
+	auto index = find_node_index(key);
+	if (index == m_table.size()) { return end(); }
+	return {&m_table, index};
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::find(Key const& key) const -> const_iterator {
-	auto const bidx = bucket(key);
-	auto const [node, _] = find_node_and_parent(key, &m_table[bidx]);
-	if (node) { return {m_table, bidx, node}; }
-	return end();
+	auto index = find_node_index(key);
+	if (index == m_table.size()) { return end(); }
+	return {&m_table, index};
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::operator[](Key const& key) -> mapped_type& {
 	auto it = find(key);
-	assert(it != end());
+	if (it == end()) {
+		auto [i, _] = emplace_impl(key, Value{});
+		it = i;
+	}
 	return it->second;
 }
 
 template <typename Key, typename Value, typename Hash>
 void hash_table<Key, Value, Hash>::clear() noexcept {
-	m_table.clear();
+	for (auto& node : m_table) { node.reset(); }
 	m_size = {};
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::begin() noexcept -> iterator {
-	auto bidx = first_bucket_index(m_table);
-	if (bidx == m_table.size()) { return end(); }
-	return {m_table, bidx, &m_table[bidx]};
+	auto index = first_bucket_index(m_table);
+	if (index == bucket_count()) { return end(); }
+	return {&m_table, index};
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::begin() const noexcept -> const_iterator {
-	auto bidx = first_bucket_index(m_table);
-	if (bidx == m_table.size()) { return end(); }
-	return {m_table, bidx, &m_table[bidx]};
+	auto index = first_bucket_index(m_table);
+	if (index == bucket_count()) { return end(); }
+	return {&m_table, index};
 }
 
 template <typename Key, typename Value, typename Hash>
 void hash_table<Key, Value, Hash>::rehash(std::size_t count) {
 	if (count == 0U) { count = 1U; }
-	if (m_table.size() >= count) { return; }
+	if (bucket_count() >= count) { return; }
 
 	// make new table
 	auto table = table_t(count);
@@ -295,9 +241,16 @@ void hash_table<Key, Value, Hash>::rehash(std::size_t count) {
 	m_size = {};
 
 	// move nodes to new table
-	for (auto& root : table) {
-		if (root.kvp) { insert_node(&root); }
+	for (auto& node : table) {
+		if (node.kvp) { emplace_impl(std::move(node.kvp->first), std::move(node.kvp->second)); }
 	}
+}
+
+template <typename Key, typename Value, typename Hash>
+float hash_table<Key, Value, Hash>::load_factor() const {
+	auto const buckets = bucket_count();
+	if (buckets == 0) { return 1.0f; }
+	return static_cast<float>(size()) / static_cast<float>(buckets);
 }
 
 template <typename Key, typename Value, typename Hash>
@@ -310,39 +263,41 @@ std::size_t hash_table<Key, Value, Hash>::first_bucket_index(Table&& table) {
 }
 
 template <typename Key, typename Value, typename Hash>
-template <typename NodePtr>
-std::pair<NodePtr, NodePtr> hash_table<Key, Value, Hash>::find_node_and_parent(Key const& key, NodePtr root, NodePtr parent) {
-	if (root) {
-		if (root->kvp && root->kvp->first == key) { return {root, parent}; }
-		return find_node_and_parent<NodePtr>(key, root->next.get(), root);
-	}
-	return {};
-}
-
-template <typename Key, typename Value, typename Hash>
-void hash_table<Key, Value, Hash>::insert_node(node_t* node) {
-	assert(node->kvp);
-	emplace_impl(std::move(node->kvp->first), std::move(node->kvp->second));
-	if (auto next = node->next.get()) { insert_node(next); }
-}
-
-template <typename Key, typename Value, typename Hash>
 template <typename K, typename... Args>
 auto hash_table<Key, Value, Hash>::emplace_impl(K&& key, Args&&... args) -> std::pair<iterator, bool> {
-	// obtain bucket
-	if (load_factor() >= 0.8f) { rehash(m_table.size() * 2U); }
-	auto const bidx = bucket(key);
-	auto* node = &m_table[bidx];
-
-	// find empty node
-	while (node->kvp) {
-		if (!node->next) { node->next = ktl::make_unique<node_t>(); }
-		node = node->next.get();
-	}
-
-	// assign
-	node->kvp.emplace(value_type{std::forward<K>(key), std::forward<Args>(args)...});
+	if (load_factor() >= 0.8f) { rehash(bucket_count() * 2U); }
+	auto const buckets = bucket_count();
+	auto const bucket = Hash{}(key) % buckets;
+	auto get_bucket = [&]() {
+		auto index = bucket;
+		do {
+			if (!m_table[index].kvp) { return index; }
+			index = (index + 1) % buckets;
+		} while (index != bucket);
+		assert("invariant violated");
+		return index;
+	};
+	auto const index = get_bucket();
+	auto& node = m_table[index];
+	node.kvp.emplace(std::pair<Key, Value>(Key{std::forward<K>(key)}, Value{std::forward<Args>(args)...}));
+	node.visited = true;
 	++m_size.value;
-	return {{m_table, bidx, node}, true};
+	return {{&m_table, index}, true};
+}
+
+template <typename Key, typename Value, typename Hash>
+std::size_t hash_table<Key, Value, Hash>::find_node_index(Key const& key) const {
+	auto const buckets = bucket_count();
+	assert(buckets > 0U);
+	auto const bucket = Hash{}(key) % buckets;
+	auto index = bucket;
+	do {
+		auto& node = m_table[index];
+		if (!node.visited) { return buckets; }
+		if (node.kvp && node.kvp->first == key) { return index; }
+		index = (index + 1) % buckets;
+	} while (index != bucket);
+	assert("Invariant violated");
+	return buckets;
 }
 } // namespace ktl

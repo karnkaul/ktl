@@ -92,7 +92,7 @@ Fixed-size vector-like container using bytearray as storage.
 
 #### `hash_table.hpp`
 
-Lightweight hash-table with chaining and reduced iterator stability.
+Lightweight hash-table with open addressing and reduced iterator stability.
 
 #### `kunique_ptr.hpp`
 
