@@ -82,6 +82,10 @@ Wrapper for indexed iteration over ranges represented by pairs of iterators.
 
 Union of expected and unexpected types; uses `either.hpp`.
 
+#### `fifo_map.hpp`
+
+First-In First-Out map.
+
 #### `fixed_any.hpp`
 
 Fixed-size type erased storage.
