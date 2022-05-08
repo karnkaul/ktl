@@ -12,7 +12,7 @@ namespace ktl {
 ///
 template <typename Type>
 class kunique_ptr {
-	static_assert(!std::is_array_v<Type>);
+	static_assert(!std::is_array_v<Type> && !std::is_reference_v<Type> && !std::is_const_v<Type>);
 	Type* m_ptr{};
 
   public:
@@ -43,6 +43,7 @@ class kunique_ptr {
 	Type* operator->() const { return (assert(m_ptr), m_ptr); }
 
 	auto operator<=>(kunique_ptr const& rhs) const = default;
+	bool operator==(std::nullptr_t) const { return !m_ptr; }
 };
 
 template <typename T, typename... Args>

@@ -2,8 +2,7 @@
 // Requirements: C++20
 
 #pragma once
-#include <memory>
-#include <type_traits>
+#include "../kunique_ptr.hpp"
 
 namespace ktl {
 ///
@@ -24,14 +23,14 @@ class kfunction<R(Args...)> {
 	///
 	template <typename F>
 		requires(!is_mof_v<F> && std::is_invocable_r_v<R, F, Args...>)
-	kfunction(F f) : m_storage(std::make_unique<model_t<F>>(std::move(f))) {}
+	kfunction(F f) : m_storage(ktl::make_unique<model_t<F>>(std::move(f))) {}
 	///
 	/// \brief Assign a callable
 	///
 	template <typename F>
 		requires(!is_mof_v<F> && std::is_invocable_r_v<R, F, Args...>)
 	kfunction& operator=(F f) {
-		m_storage = std::make_unique<model_t<F>>(std::move(f));
+		m_storage = ktl::make_unique<model_t<F>>(std::move(f));
 		return *this;
 	}
 
@@ -74,6 +73,6 @@ class kfunction<R(Args...)> {
 		model_t(T&&... t) : func(std::forward<T>(t)...) {}
 		R call(Args... args) override { return func(args...); }
 	};
-	std::unique_ptr<base_t> m_storage;
+	ktl::kunique_ptr<base_t> m_storage;
 };
 } // namespace ktl
