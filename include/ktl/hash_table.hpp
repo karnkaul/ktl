@@ -274,7 +274,7 @@ auto hash_table<Key, Value, Hash>::emplace_impl(K&& key, Args&&... args) -> std:
 			if (!m_table[index].kvp) { return index; }
 			index = (index + 1) % buckets;
 		} while (index != bucket);
-		assert("invariant violated");
+		assert(false && "invariant violated");
 		return index;
 	};
 	auto const index = get_bucket();
@@ -297,7 +297,7 @@ std::size_t hash_table<Key, Value, Hash>::find_node_index(Key const& key) const 
 		if (node.kvp && node.kvp->first == key) { return index; }
 		index = (index + 1) % buckets;
 	} while (index != bucket);
-	assert("Invariant violated");
+	assert(false && "Invariant violated");
 	return buckets;
 }
 } // namespace ktl
