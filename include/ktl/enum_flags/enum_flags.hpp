@@ -2,9 +2,9 @@
 // Requirements: C++20
 
 #pragma once
-#include <cstdint>
 #include "bitflags.hpp"
 #include "enum_traits.hpp"
+#include <cstdint>
 
 namespace ktl {
 ///
@@ -141,7 +141,7 @@ class enum_flags {
 template <typename Enum, std::integral Ty, typename Tr>
 constexpr enum_flags<Enum, Ty, Tr>::enum_flags(Enum const e) noexcept {
 	if constexpr (is_linear_v) {
-		m_bits |= (1 << static_cast<Ty>(e));
+		m_bits |= static_cast<Ty>(1 << static_cast<Ty>(e));
 	} else {
 		m_bits |= static_cast<Ty>(e);
 	}

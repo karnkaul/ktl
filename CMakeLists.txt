@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.1)
+set(${project_name}_version 1.2)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -28,6 +28,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cmake-utils)
 FetchContent_GetProperties(cmake-utils)
+include("${cmake-utils_SOURCE_DIR}/cmake-utils.cmake")
 
 set(${project_name}_soversion ${PROJECT_VERSION_MAJOR})
 add_library(${project_name} INTERFACE)
@@ -95,6 +96,5 @@ endif()
 
 # install and export
 if(KTL_INSTALL)
-  include("${cmake-utils_SOURCE_DIR}/cmake-utils.cmake")
   install_and_export_target(TARGET ${PROJECT_NAME})
 endif()
