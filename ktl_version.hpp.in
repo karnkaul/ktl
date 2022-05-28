@@ -1,6 +1,6 @@
 #pragma once
-#include <string_view>
+#include <ktl/kversion.hpp>
 
 namespace ktl {
-constexpr std::string_view version = "@ktl_version@";
+constexpr auto version_v = kversion{@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@};
 }
