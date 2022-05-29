@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.14)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_DEBUG_POSTFIX "-d")
+
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.3.0)
+set(${project_name}_version 1.4.0)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -48,7 +53,6 @@ target_include_directories(${project_name} INTERFACE
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
   target_sources(${project_name} PRIVATE
     include/ktl/async/async_queue.hpp
-    include/ktl/async/kasync.hpp
     include/ktl/async/kfunction.hpp
     include/ktl/async/kfuture.hpp
     include/ktl/async/kthread.hpp
@@ -69,16 +73,15 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/fixed_pimpl.hpp
     include/ktl/fixed_vector.hpp
     include/ktl/hash_table.hpp
+    include/ktl/kformat.hpp
     include/ktl/koverloaded.hpp
     include/ktl/kunique_ptr.hpp
     include/ktl/kvariant.hpp
+    include/ktl/kversion.hpp
     include/ktl/n_tree.hpp
     include/ktl/not_null.hpp
     include/ktl/ring_buffer.hpp
     include/ktl/ring_counter.hpp
-    include/ktl/stack_string.hpp
-    include/ktl/str_format.hpp
-    include/ktl/str_formatter.hpp
     include/ktl/tagged_store.hpp
     include/ktl/unique_val.hpp
   )

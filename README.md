@@ -17,10 +17,6 @@ A lightweight set of utility headers written in C++20.
 
 ### Headers
 
-#### `async/async.hpp`
-
-RAII wrapper for asynchronous invocation (blocks until drained on destruction)
-
 #### `async/async_queue.hpp`
 
 FIFO queue with thread safe "sleepy" API.
@@ -98,9 +94,17 @@ Fixed-size vector-like container using bytearray as storage.
 
 Lightweight hash-table with open addressing and reduced iterator stability.
 
+#### `kformat.hpp`
+
+Lightweight fmt-like `std::string` interpolation with basic formatting support.
+
 #### `kunique_ptr.hpp`
 
-Lightweight unique pointer to heap-allocated Type*
+Lightweight unique pointer to heap-allocated Type*.
+
+#### `kversion.hpp`
+
+Semantic version.
 
 #### `monotonic_map.hpp`
 
@@ -121,18 +125,6 @@ Rotating ring-buffer using contiguous storage (`std::vector<T>` by default). Ove
 #### `ring_counter.hpp`
 
 Fixed-size rotating integral counter. Supports increment/decrement.
-
-#### `stack_string.hpp`
-
-Wrapper for stack allocated char array / C string.
-
-#### `str_format.hpp`
-
-Format a `std::string` using provided interpolation token (`{}` by default).
-
-#### `str_formatter.hpp`
-
-Customization points for str_format interface.
 
 ### Contributing
 

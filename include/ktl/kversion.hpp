@@ -1,3 +1,6 @@
+// KTL single-header library
+// Requirements: C++20
+
 #pragma once
 #include <compare>
 
