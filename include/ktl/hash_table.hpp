@@ -66,7 +66,7 @@ class hash_table {
 	struct node_t;
 	using table_t = std::vector<node_t>;
 
-	std::size_t find_node_index(Key const& key) const;
+	std::size_t find_node_index(Key const& key, std::size_t& out_visited) const;
 
 	table_t m_table{};
 	unique_val<std::size_t> m_size{};
@@ -160,18 +160,24 @@ auto hash_table<Key, Value, Hash>::insert_or_assign(Key&& key, Value value) -> s
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::insert_or_assign(Key const& key, Value value) -> std::pair<iterator, bool> {
-	if (auto it = find(key); it != end()) {
-		it->second = std::move(value);
-		return {it, false};
+	auto visited = std::size_t{};
+	auto index = find_node_index(key, visited);
+	if (index == m_table.size()) {
+		if (m_table.size() > 5 && visited >= m_table.size() / 5) { rehash(bucket_count()); }
+		return emplace_impl(key, std::move(value));
 	}
-	return emplace_impl(key, std::move(value));
+	auto it = iterator{&m_table, index};
+	it->second = std::move(value);
+	return {it, false};
 }
 
 template <typename Key, typename Value, typename Hash>
 bool hash_table<Key, Value, Hash>::erase(Key const& key) {
-	if (auto index = find_node_index(key); index < m_table.size()) {
+	auto visited = std::size_t{};
+	if (auto index = find_node_index(key, visited); index < m_table.size()) {
 		m_table[index].reset(true);
 		--m_size.value;
+		if (m_table.size() > 5 && visited > m_table.size() / 5) { rehash(bucket_count()); }
 		return true;
 	}
 	return false;
@@ -188,14 +194,16 @@ auto hash_table<Key, Value, Hash>::erase(iterator it) -> iterator {
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::find(Key const& key) -> iterator {
-	auto index = find_node_index(key);
+	auto visited = std::size_t{};
+	auto index = find_node_index(key, visited);
 	if (index == m_table.size()) { return end(); }
 	return {&m_table, index};
 }
 
 template <typename Key, typename Value, typename Hash>
 auto hash_table<Key, Value, Hash>::find(Key const& key) const -> const_iterator {
-	auto index = find_node_index(key);
+	auto visited = std::size_t{};
+	auto index = find_node_index(key, visited);
 	if (index == m_table.size()) { return end(); }
 	return {&m_table, index};
 }
@@ -233,7 +241,6 @@ auto hash_table<Key, Value, Hash>::begin() const noexcept -> const_iterator {
 template <typename Key, typename Value, typename Hash>
 void hash_table<Key, Value, Hash>::rehash(std::size_t count) {
 	if (count == 0U) { count = 1U; }
-	if (bucket_count() >= count) { return; }
 
 	// make new table
 	auto table = table_t(count);
@@ -286,7 +293,7 @@ auto hash_table<Key, Value, Hash>::emplace_impl(K&& key, Args&&... args) -> std:
 }
 
 template <typename Key, typename Value, typename Hash>
-std::size_t hash_table<Key, Value, Hash>::find_node_index(Key const& key) const {
+std::size_t hash_table<Key, Value, Hash>::find_node_index(Key const& key, std::size_t& out_visited) const {
 	auto const buckets = bucket_count();
 	assert(buckets > 0U);
 	auto const bucket = Hash{}(key) % buckets;
@@ -295,9 +302,10 @@ std::size_t hash_table<Key, Value, Hash>::find_node_index(Key const& key) const 
 		auto& node = m_table[index];
 		if (!node.visited) { return buckets; }
 		if (node.kvp && node.kvp->first == key) { return index; }
+		++out_visited;
 		index = (index + 1) % buckets;
 	} while (index != bucket);
-	assert(false && "Invariant violated");
+	// all nodes marked visited
 	return buckets;
 }
 } // namespace ktl

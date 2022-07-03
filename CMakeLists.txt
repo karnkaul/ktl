@@ -8,7 +8,7 @@ set(CMAKE_DEBUG_POSTFIX "-d")
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.4.0)
+set(${project_name}_version 1.4.1)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
