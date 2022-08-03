@@ -58,6 +58,10 @@ Wrapper around an integral type used as bit flags.
 
 Free functions for working with integral bit flags.
 
+#### `byte_array.hpp`
+
+Lightweight, resizeable wrapper over `std::unique_ptr<std::byte[]>`.
+
 #### `debug_trap.hpp`
 
 x86/x64 debugger trap/break.

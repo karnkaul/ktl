@@ -8,7 +8,7 @@ set(CMAKE_DEBUG_POSTFIX "-d")
 enable_language(CXX)
 
 set(project_name ktl)
-set(${project_name}_version 1.4.1)
+set(${project_name}_version 1.4.2)
 set(cxx_standard cxx_std_20)
 
 project(${project_name} VERSION ${${project_name}_version})
@@ -64,6 +64,7 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     include/ktl/enum_flags/enum_traits.hpp
     include/ktl/enum_flags/enumerate_enum.hpp
 
+    include/ktl/byte_array.hpp
     include/ktl/debug_trap.hpp
     include/ktl/delegate.hpp
     include/ktl/either.hpp
