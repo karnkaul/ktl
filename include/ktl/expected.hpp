@@ -3,8 +3,31 @@
 
 #pragma once
 #include "either.hpp"
+#include <exception>
 
 namespace ktl {
+template <typename E>
+class bad_expected_access;
+
+template <>
+class bad_expected_access<void> : public std::exception {
+  public:
+	bad_expected_access() = default;
+	char const* what() const noexcept override { return "bad expected access"; }
+};
+
+template <typename E>
+class bad_expected_access : public bad_expected_access<void> {
+  public:
+	bad_expected_access(E t) noexcept : m_error(std::move(t)) {}
+
+	E const& error() const& noexcept { return m_error; }
+	E& error() & noexcept { return m_error; }
+
+  private:
+	E m_error;
+};
+
 ///
 /// \brief Wrapper type for any T
 ///
@@ -145,19 +168,19 @@ constexpr expected<T, E>::expected(Ty&& t) noexcept(std::is_nothrow_constructibl
 
 template <typename T, typename E>
 constexpr T const& expected<T, E>::value() const& {
-	if (m_err) { throw error(); }
+	if (m_err) { throw bad_expected_access{error()}; }
 	return m_either.template get<T>();
 }
 
 template <typename T, typename E>
 constexpr T& expected<T, E>::value() & {
-	if (m_err) { throw error(); }
+	if (m_err) { throw bad_expected_access{error()}; }
 	return m_either.template get<T>();
 }
 
 template <typename T, typename E>
 constexpr T&& expected<T, E>::value() && {
-	if (m_err) { throw error(); }
+	if (m_err) { throw bad_expected_access{error()}; }
 	return std::move(m_either).template get<T>();
 }
 
