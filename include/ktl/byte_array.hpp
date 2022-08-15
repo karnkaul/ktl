@@ -37,8 +37,6 @@ class byte_array {
 	std::span<std::byte const> span() const { return {data(), size()}; }
 	operator std::span<std::byte const>() const { return span(); }
 
-	void swap(byte_array& rhs) { std::swap(m_data, rhs.m_data); }
-
   private:
 	std::unique_ptr<std::byte[]> m_data{};
 	std::size_t m_capacity{};
